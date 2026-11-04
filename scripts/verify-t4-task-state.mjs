@@ -331,8 +331,13 @@ async function main() {
         src.includes("if (st !== 'succeeded' && st !== 'local') return false")
       )
       check(
-        'E2 幂等判据行原文未变（prev?.status === \'succeeded\' && prev.fingerprint === fp）',
-        src.includes("if (prev?.status === 'succeeded' && prev.fingerprint === fp) {")
+        'E2 幂等判据仍为 succeeded + 同指纹（允许前置 !force 短路）',
+        // 说明：早期实现无 force 参数，原文是 `prev?.status === 'succeeded' && prev.fingerprint === fp`；
+        // 后来加了 force 强制重发，判据变成 `!force && prev?.status === ...`。
+        // 这里改为**语义断言**（必须同时检查 status 与 fingerprint，且尊重 force），
+        // 不再逐字匹配——逐字匹配会让合理演进误报为回归。
+        /if \(!force && prev\?\.status === 'succeeded' && prev\.fingerprint === fp\) \{/.test(src) ||
+          /if \(prev\?\.status === 'succeeded' && prev\.fingerprint === fp\) \{/.test(src)
       )
       check('E3 orchestrator 仍只用 loadTaskStates 取 prevStates（未自行过滤/兜底）', src.includes('const prevStates = await loadTaskStates(root)'))
       const persistSrc = await readFile(join(FEATHER, 'src/main/pipeline/persistence.ts'), 'utf8')

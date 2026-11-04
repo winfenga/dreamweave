@@ -274,17 +274,19 @@ async function main() {
   const r = await reg.loadTaskRegistry(REGISTRY_DIR)
   if (!r.ok || !r.tasks) throw new Error(`注册表加载失败：${r.error}`)
   registryTasks = r.tasks
+  // 任务数改为从注册表动态取：新增任务（如 C 线漫画 4 个）不应让本脚本失败
+  const EXPECT_TASKS = registryTasks.length
 
   try {
     // =====================================================================
     // A · 基础分类
     // =====================================================================
-    console.log('A · 基础分类（29 任务 / 本机 / 来源包历史）')
+    console.log(`A · 基础分类（${EXPECT_TASKS} 任务 / 本机 / 来源包历史）`)
     const ws = await makeWorkspace('ws-main')
     const a = await ov.buildTasksOverview(ws, { registryDir: REGISTRY_DIR })
     {
-      check('A1 tasks.length === 29（一行一个注册表任务）', a.tasks.length === 29, String(a.tasks.length))
-      check('A2 注册表本身 29 个任务（面板行数 = 注册表条数）', registryTasks.length === 29, String(registryTasks.length))
+      check(`A1 tasks.length === ${EXPECT_TASKS}（一行一个注册表任务）`, a.tasks.length === EXPECT_TASKS, String(a.tasks.length))
+      check(`A2 注册表本身 ${EXPECT_TASKS} 个任务（面板行数 = 注册表条数）`, registryTasks.length === EXPECT_TASKS, String(registryTasks.length))
       check('A3 inheritedTotal === 3（包内历史条数）', a.inheritedTotal === EXPECT_INHERITED, `${a.inheritedTotal} vs ${EXPECT_INHERITED}`)
       check('A4 localTotal === 12（本机状态条数，含 1 条脏键）', a.localTotal === EXPECT_LOCAL_TOTAL, `${a.localTotal} vs ${EXPECT_LOCAL_TOTAL}`)
       check(
@@ -429,7 +431,7 @@ async function main() {
       const topo = dag.topoOrder(registryTasks)
       const ids = a.tasks.map((t) => t.id)
       check('F1 tasks 的 id 序列与 topoOrder(tasks).order 逐个相等', ids.join(',') === topo.order.join(','), `${ids.slice(0, 5).join(',')}… vs ${topo.order.slice(0, 5).join(',')}…`)
-      check('F2 拓扑序长度 29（与面板行数一致）', topo.order.length === 29, String(topo.order.length))
+      check(`F2 拓扑序长度 ${EXPECT_TASKS}（与面板行数一致）`, topo.order.length === EXPECT_TASKS, String(topo.order.length))
       const pos = new Map(ids.map((id, i) => [id, i]))
       const violations = []
       for (const t of a.tasks) {
@@ -499,7 +501,7 @@ async function main() {
         e3 = e.message
       }
       check('G7 无 index.json → 不抛（pkgId/title 留空）', !e3, e3)
-      check('G8 无 index.json → identity 为空串但任务行仍在（29 行不缺）', !!d && d.pkgId === '' && d.title === '' && d.tasks.length === 29, e3 || `${d?.pkgId}/${d?.title}/${d?.tasks.length}`)
+      check(`G8 无 index.json → identity 为空串但任务行仍在（${EXPECT_TASKS} 行不缺）`, !!d && d.pkgId === '' && d.title === '' && d.tasks.length === EXPECT_TASKS, e3 || `${d?.pkgId}/${d?.title}/${d?.tasks.length}`)
 
       // G9 注册表目录不存在 → 抛可读错误
       let e4 = ''
@@ -578,7 +580,7 @@ async function main() {
       const after = []
       for (const f of watched) after.push(await stat(join(REAL_ROOT, f)))
       check('I1 对真实库跑一次不抛', !eI, eI)
-      check('I2 tasks.length === 29', real?.tasks.length === 29, String(real?.tasks.length))
+      check(`I2 tasks.length === ${EXPECT_TASKS}`, real?.tasks.length === EXPECT_TASKS, String(real?.tasks.length))
       check('I3 inheritedTotal === 95（95 条包内历史）', real?.inheritedTotal === 95, String(real?.inheritedTotal))
       check('I4 localTotal === 0（本机一条没跑）', real?.localTotal === 0, String(real?.localTotal))
       check(
