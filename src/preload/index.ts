@@ -6,6 +6,7 @@ import type {
   SpeakResult,
   ViewResult
 } from '../shared/app-types'
+import type { MangaViewResult } from '../shared/manga-types'
 import type { WorkspaceListResult } from '../shared/workspace-types'
 import type { ExportT2wResult } from '../shared/workspace-types'
 import type {
@@ -73,6 +74,8 @@ const api = {
     ipcRenderer.invoke('t2w:preview', filePath, entryPath),
   /** 地图互动 / 视觉互动的渲染模型 */
   getView: (): Promise<ViewResult> => ipcRenderer.invoke('t2w:view'),
+  /** 漫画线投影模型（漫画包不产出 storyScript，走独立通道） */
+  getMangaView: (): Promise<MangaViewResult> => ipcRenderer.invoke('t2w:mangaView'),
   getSettings: (): Promise<ModelSettings> => ipcRenderer.invoke('settings:get'),
   saveSettings: (next: Partial<ModelSettings>): Promise<{ ok: boolean; error?: string; settings?: ModelSettings }> =>
     ipcRenderer.invoke('settings:save', next),

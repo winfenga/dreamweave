@@ -7,6 +7,7 @@ import type {
   SourceReadResult,
   ViewResult
 } from '../../shared/app-types'
+import type { MangaViewResult } from '../../shared/manga-types'
 import type { ExportT2wResult, WorkspaceListResult } from '../../shared/workspace-types'
 import type {
   ParseStatus,
@@ -16,6 +17,7 @@ import type {
 } from '../../shared/pipeline-types'
 import { buildSummary, extractChapters } from '../t2w/summary'
 import { buildViewData } from '../t2w/view'
+import { buildMangaView } from '../t2w/manga'
 import { readPackage } from '../t2w'
 import { loadSettings, saveSettings, validateBaseURL } from '../settings/store'
 import { resolveStorePath } from '../workspace/assets'
@@ -72,6 +74,8 @@ export const IPC = {
   importPackage: 't2w:import',
   previewEntry: 't2w:preview',
   view: 't2w:view',
+  /** 漫画线投影模型（独立通道：漫画包不产出 storyScript） */
+  mangaView: 't2w:mangaView',
   settingsGet: 'settings:get',
   settingsSave: 'settings:save',
   /** 合成一段文本（缓存优先；未配置模型接入时返回可读错误，不发起请求） */
@@ -277,6 +281,12 @@ async function openWorkspace(dirName: string): Promise<ImportResult> {
   }
 }
 
+/**
+ * 无漫画线时给渲染层的提示文案。
+ * 「本包是纯文本线（storyScript 产出），没有 mangaScript 任务产物」时返回它。
+ */
+const EMPTY_MANGA_HINT = '本工作库没有漫画线数据（未产出 mangaScript / 页面图），可能是纯文本演出包。'
+
 export function registerIpc(): void {
   // presetPath 用于「打开方式 / 命令行 / 自动化测试」直接指定包路径；不传则弹出文件选择框。
   // kind 仅决定文件框的过滤项与标题（.t2w 与 .txt 都可选 / 仅 .txt）；预设路径时**按扩展名分流**，忽略 kind。
@@ -340,6 +350,21 @@ export function registerIpc(): void {
       const index = await readIndex(session.root)
       const manifest = await assembleManifest(session.root, index)
       return { ok: true, data: buildViewData(manifest, session.assetBase) }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  // 漫画线投影模型（独立于 view：漫画包不产出 storyScript，两条线数据结构不同）
+  ipcMain.handle(IPC.mangaView, async (): Promise<MangaViewResult> => {
+    try {
+      const session = getWorkspaceSession()
+      if (!session) return { ok: false, error: '尚未导入任何工作库' }
+      const index = await readIndex(session.root)
+      const manifest = await assembleManifest(session.root, index)
+      const data = buildMangaView(manifest, session.assetBase)
+      if (!data) return { ok: false, error: EMPTY_MANGA_HINT }
+      return { ok: true, data }
     } catch (e) {
       return { ok: false, error: (e as Error).message }
     }

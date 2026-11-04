@@ -6,6 +6,7 @@ import LibraryView from './components/LibraryView.vue'
 import ReadingView from './components/ReadingView.vue'
 import MapView from './components/MapView.vue'
 import StageView from './components/StageView.vue'
+import MangaView from './components/MangaView.vue'
 import ImpressionView from './components/ImpressionView.vue'
 import ScriptEditor from './components/ScriptEditor.vue'
 import type { ImportSummary, ModelSettings, ViewData } from '../../shared/app-types'
@@ -19,6 +20,7 @@ type Tab =
   | 'reading'
   | 'map'
   | 'stage'
+  | 'manga'
   | 'impression'
   | 'script'
   | 'settings'
@@ -240,6 +242,9 @@ async function doImport(kind: 't2w' | 'txt' = 't2w'): Promise<void> {
           <button class="side-item" :class="{ active: tab === 'stage' }" @click="tab = 'stage'">
             <span class="side-ico">🎬</span><span>视觉演出</span>
           </button>
+          <button class="side-item" :class="{ active: tab === 'manga' }" @click="tab = 'manga'">
+            <span class="side-ico">🎞️</span><span>漫画阅读</span>
+          </button>
           <button class="side-item" :class="{ active: tab === 'script' }" @click="tab = 'script'">
             <span class="side-ico">📝</span><span>脚本修订</span>
           </button>
@@ -292,7 +297,7 @@ async function doImport(kind: 't2w' | 'txt' = 't2w'): Promise<void> {
            进入设置时必须恢复滚动，否则「保存」等下方控件永远点不到 -->
       <div
         class="content"
-        :class="{ 'content-flush': !isSettingsTab && (tab === 'map' || tab === 'stage' || tab === 'impression' || tab === 'script' || tab === 'reading') }"
+        :class="{ 'content-flush': !isSettingsTab && (tab === 'map' || tab === 'stage' || tab === 'manga' || tab === 'impression' || tab === 'script' || tab === 'reading') }"
       >
         <div v-if="error" class="error">{{ error }}</div>
 
@@ -313,6 +318,7 @@ async function doImport(kind: 't2w' | 'txt' = 't2w'): Promise<void> {
           <MapView v-if="tab === 'map' && view" :view="view" />
           <ImpressionView v-else-if="tab === 'impression' && view" :view="view" />
           <StageView v-else-if="tab === 'stage' && view" :view="view" :settings="settings" />
+          <MangaView v-else-if="tab === 'manga'" />
           <ScriptEditor v-else-if="tab === 'script' && view" :view="view" @saved="reloadView" />
           <ReadingView v-else-if="tab === 'reading'" :target="readingTarget" />
           <SummaryView

@@ -17,6 +17,7 @@
     "verify:t2w": "node scripts/verify-t2w.mjs",
     "verify:views": "node scripts/verify-views.mjs",
     "verify:stage": "node scripts/verify-stage.mjs",
+    "verify:manga": "node scripts/verify-manga.mjs",
     "verify:p4": "node scripts/verify-p4.mjs",
     "verify:origin-header": "node scripts/verify-origin-header.mjs",
     "verify:workspace": "node scripts/verify-workspace.mjs",

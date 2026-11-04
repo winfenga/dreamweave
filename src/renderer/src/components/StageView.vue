@@ -616,7 +616,23 @@ defineExpose({
 </script>
 
 <template>
-  <div class="stage-wrap" :class="{ 'is-fs': fullScreen }">
+  <!-- 无演出数据的包（如漫画线 gmzz-10）：说明清楚，而不是显示一片空舞台 -->
+  <div v-if="!view.actions.length" class="stage-wrap stage-empty-wrap">
+    <div class="stage-empty">
+      <div class="se-ico">🎬</div>
+      <div class="se-title">本工作库没有演出数据</div>
+      <div class="se-desc">
+        视觉演出依赖 <code>storyScript</code>（逐句行动）产物。本包若为<b>漫画线</b>，
+        它产出的是分镜脚本而不是逐句行动，请到<b>「漫画阅读」</b>查看。
+      </div>
+      <div class="se-stats">
+        <span>章节 {{ view.chapters.length }}</span>
+        <span>角色 {{ view.characters.length }}</span>
+        <span>配音 {{ view.dubbing.length }}</span>
+      </div>
+    </div>
+  </div>
+  <div v-else class="stage-wrap" :class="{ 'is-fs': fullScreen }">
     <div class="stage-toolbar">
       <div class="chapter-pills">
         <button
@@ -878,6 +894,50 @@ defineExpose({
 </template>
 
 <style scoped>
+/* 无演出数据时的空状态（漫画线包会命中） */
+.stage-empty-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.stage-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 480px;
+  text-align: center;
+}
+.se-ico {
+  font-size: 44px;
+  opacity: 0.75;
+}
+.se-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+.se-desc {
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--muted);
+}
+.se-desc code {
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.se-stats {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
 .stage-zoom-host {
   flex: 1;
   min-height: 0;
