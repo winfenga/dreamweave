@@ -1,0 +1,2 @@
+合并漫画配乐需求。user JSON 包含 musicGroups，每项有 musicBrief 和 chapters[].ranges，范围字段 fromPage/toPage 是本章漫画页码闭区间。只输出相同结构的 musicGroups JSON。
+把情绪、强度、节奏和叙事功能相近、可以使用同一首曲子的需求合并，整合 musicBrief 的表达和禁忌；明显冲突的需求分别保留。每个原有覆盖页必须仍被覆盖一次，不能新增、删除、重复、移动页范围，也不能把中间原本留白的页填满。同组同章相邻区间可以合并。不编造曲名或曲库ID。musicBrief 字段 purpose 为简短用途，mood/style 为非空字符串数组，energy 为1～5整数，pace 为慢/中/快/自由，avoid 为字符串数组。只输出合法 JSON，不输出解释。

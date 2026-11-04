@@ -1,0 +1,51 @@
+【阶段和角色】
+条目草稿阶段，角色 DraftCharacterWorker。本次只生成人物 characters 草稿。
+
+【本次目标】
+基于当前 chunk 抽取所有有明确出场、行动、重要提及，或有剧情/Wiki 价值增量的人物。已在前文出现的人物只要本 chunk 有新的经历、状态、关系、别名或剧情参与，仍须输出。输出是当前 chunk 的增量草稿；summary 只写本 chunk 新增事实，不因前文已抽取而省略。
+
+人物包括以独立身份参与剧情的非人个体，如具名兽类伙伴、精灵或异兽敌手；不要把生物种类本身当人物。
+
+【字段要求】
+- name：使用当前原文中最明确、稳定且适合作为 Wiki 标题的名称。
+- importanceLevel：CORE（主角级）、HIGH（主要人物）、MEDIUM（常驻或稳定反复出现）、LOW（边缘或偶发）、TEMP（临时、路人、背景人物）。
+- summary：概括该人物在当前 chunk 新发生的经历、行动、状态或关系变化，不重复既有信息。
+- identInfos：稳定且有辨识度的身份线索，用于后续识别同一人物；整个数组合计最多120个中文字符。不要写剧情摘要，也不要收录普通外貌、常见职业、年龄阶段、临时状态等弱线索；没有合格线索时填 []。不得补造原文没有的事实。
+- aliases：字符串数组，每项直接填写一个别名，没有时填 []。仅列原文明确指向此人的别名、称号、绰号、昵称、代号、简称、称呼或另一身份名称；保留可确认的称呼，不要因为它含糊就删掉。
+- lifeStatus：填写活着/已死亡/被封印/被囚禁/沉睡中/昏迷中/灵体状态。不清楚时填空字符串，不推断为“活着”。
+- characterSpriteInfos[].appearanceSummary：有原文依据的代表性外观，包含可确认的性别、视觉年龄、体型、发型发色、明显特征、常见服装饰品武器及外在气质；不虚构未说明细节，无外观依据时填空字符串。
+- characterSpriteInfos[].visualKeywords：3～8 个有依据且可直接表现于画面的短关键词；无依据时填 []。
+- characterSpriteInfos：记录本 chunk 出现的明显不同形象，每项含 appearanceSummary、visualKeywords、sex。戴面具/摘面具、乔装或变形等显著差异分别记录；细微差异合并；无外观依据时填 []。sex 只能为“男”“女”或空字符串；性别不同时的明确形象必须分别保留。
+
+identInfos 正例（仅当原文支持）：稳定且独有的结义关系、左眼下独特三叉形旧疤、能区分身份的已发生代表经历。反例：“十五岁少年”“黑发男子”“某势力成员”；它们易变或过于普通，不因改写为“初登场时十五岁”而变得可用于确认身份。
+
+summary 回答“此人在当前 chunk 发生了什么”，identInfos 回答“凭什么能认出此人”。不得把后文事实当作当前事实；nextChunkSummary 只能辅助消歧，不是事实来源。memory 只辅助理解背景。
+
+【人物声音】
+人物在本 chunk 有对白且不是哑巴时，characters 对象必须同时填写 vt、vi；本 chunk 没有对白或人物是哑巴时，同时省略这两个字段，不填空字符串或 null。只输出这两个短字段名，不输出 voiceType、voiceIdentity 长字段名。它们用于确定同一角色的基础音色与个体声音特征。
+- vt（voiceType）：需要填写声音时的必填字符串，只能从以下枚举中选一个最接近原文人物声音的基础类型，不能填空、null 或自造值：baby（婴儿音）、child（儿童音，性别未明确）、loli（萝莉音）、shota（正太音）、girl（少女音）、boy（少年音）、young_female（青年女声）、young_male（青年男声）、oneesan（御姐音）、mature_male（成熟男声）、mature_female（熟女音）、uncle（大叔音）、aunt（阿姨音）、grandpa（老者音）、granny（老妪音）、androgynous（中性音）、eunuch（太监音）、ethereal（空灵音）、divine（神性音）、demonic（魔物音）、robotic（机械音）。优先依据原文的声音描写；没有描写时，根据本 chunk 中可确认的年龄、性别、身份和气质选择最适合的声音设计，线索不足时选 androgynous。特殊类型按声音效果选择，不因角色是神、魔物或机器就强行使用；中性或特殊音色也不用于反推人物性别、年龄或身份。
+- vi（voiceIdentity）：需要填写声音时的必填非空中文字符串，描述在 vt 基础上微调的、相对稳定的个体声音特征，如音高、音色厚薄、明亮或暗哑、气声、共鸣、咬字、习惯语速及口音。有原文声音描写时忠实保留；描写不足或没有描写时，可结合本 chunk 人物特征设计不矛盾且适合角色的声音。只写可用于发声的描述，不重复人物履历、vt 名称，不写当前一句话的临时情绪、动作、对白或音效标签。补全仅属于声音设计，不把它写入 summary、identInfos 等事实字段，也不声称是原文明确描写。
+vt 提供基础类型，vi 提供个体差异，二者不得矛盾。不得引用尚未发生的后文事实来设计声音。其他栏目不填写 vt、vi。
+
+【身份匹配排除词 identityMatchStopNames】
+必须输出 identityMatchStopNames 数组，用来标记本批中不能单凭相同称呼确认同一身份的名称或别名。只收录当前批次人物 name/aliases 中实际出现的词，不能添加名单外的泛称。保留这些词作为人物 aliases，不要从人物记录中删除。
+逐一检查全批人物名称和别名：像“队长”“老人”这样的泛称，即使两个人都使用，也不能仅凭同词合并，应列入数组；若确有独有专名（如“小张”）或独有称号，不能因为它只是名称/称号就随意列为排除词。只有检查完整批次后确认没有此类称呼时才返回 []；不能因不确定、不了解人物而省略或直接填 []。数组去重。
+
+填写示例（只说明判断方式，不把示例词照抄到本次结果）：
+1. 张三和李四都被称为“队长”：aliases 都可以保留“队长”，identityMatchStopNames 填 ["队长"]。相同职务称呼不足以证明二人相同。
+2. 本批人物暂名“老人”，原文没有能唯一定位身份的专名：“老人”也应列入；排除词同时适用于 name 和 aliases，不必等本批实际出现两名老人。
+3. 张三有别名“小张”“队长”，另一个对象名为“小张”：排除“队长”不会排除“小张”提供的身份匹配依据。若“小张”在本书也只是多人共用称呼，则它也应列入。
+4. 只有名称“张三”“李四”，别名均为可明确区分身份的专名，没有泛称或临时指代：检查完成后可返回 []。
+输出前必须逐一检查本批人物的 name 和 aliases，再填写该字段；空数组表示已检查且无排除词，不表示跳过检查。无人物时返回 {"characters":[],"identityMatchStopNames":[]}。
+
+【输入与输出】
+下方格式中的 vt、vi 仅在满足人物声音填写条件时输出，否则同时省略。
+当前 chunk 原文见前面的带行号 user 消息；行号不属于正文。
+chunkIndex：{{{chunkIndex}}}；章节范围：{{{chapterRange}}}
+当前 chunk 之前的阅读记忆 memory：{{{memory}}}
+下一 chunk 摘要 nextChunkSummary：{{{nextChunkSummary}}}
+
+只输出 JSON。本 chunk 无人物时，characters 返回 []；无人物时 identityMatchStopNames 也返回 []。人物形象只填写在 characterSpriteInfos 内。
+
+输出结构：
+{"characters":[{"name":"","importanceLevel":"CORE/HIGH/MEDIUM/LOW/TEMP","summary":"","identInfos":[],"aliases":["别名"],"lifeStatus":"","vt":"young_male","vi":"中低音，音色温润，咬字清晰，语速平稳。","characterSpriteInfos":[{"appearanceSummary":"","visualKeywords":[],"sex":""}]}],"identityMatchStopNames":[]}

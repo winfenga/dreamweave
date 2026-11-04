@@ -22,10 +22,10 @@ identInfos 正例（仅当原文支持）：稳定且独有的结义关系、左
 summary 回答“此人在当前 chunk 发生了什么”，identInfos 回答“凭什么能认出此人”。不得把后文事实当作当前事实；nextChunkSummary 只能辅助消歧，不是事实来源。memory 只辅助理解背景。
 
 【人物声音】
-人物在本 chunk 有对白且不是哑巴时，characters 对象必须同时填写 vt、vi；本 chunk 没有对白或人物是哑巴时，同时省略这两个字段，不填空字符串或 null。只输出这两个短字段名，不输出 voiceType、voiceIdentity 长字段名。它们用于确定同一角色的基础音色与个体声音特征。
-- vt（voiceType）：需要填写声音时的必填字符串，只能从以下枚举中选一个最接近原文人物声音的基础类型，不能填空、null 或自造值：baby（婴儿音）、child（儿童音，性别未明确）、loli（萝莉音）、shota（正太音）、girl（少女音）、boy（少年音）、young_female（青年女声）、young_male（青年男声）、oneesan（御姐音）、mature_male（成熟男声）、mature_female（熟女音）、uncle（大叔音）、aunt（阿姨音）、grandpa（老者音）、granny（老妪音）、androgynous（中性音）、eunuch（太监音）、ethereal（空灵音）、divine（神性音）、demonic（魔物音）、robotic（机械音）。优先依据原文的声音描写；没有描写时，根据本 chunk 中可确认的年龄、性别、身份和气质选择最适合的声音设计，线索不足时选 androgynous。特殊类型按声音效果选择，不因角色是神、魔物或机器就强行使用；中性或特殊音色也不用于反推人物性别、年龄或身份。
-- vi（voiceIdentity）：需要填写声音时的必填非空中文字符串，描述在 vt 基础上微调的、相对稳定的个体声音特征，如音高、音色厚薄、明亮或暗哑、气声、共鸣、咬字、习惯语速及口音。有原文声音描写时忠实保留；描写不足或没有描写时，可结合本 chunk 人物特征设计不矛盾且适合角色的声音。只写可用于发声的描述，不重复人物履历、vt 名称，不写当前一句话的临时情绪、动作、对白或音效标签。补全仅属于声音设计，不把它写入 summary、identInfos 等事实字段，也不声称是原文明确描写。
-vt 提供基础类型，vi 提供个体差异，二者不得矛盾。不得引用尚未发生的后文事实来设计声音。其他栏目不填写 vt、vi。
+人物在本 chunk 有对白且不是哑巴时，characters 对象必须同时填写 voiceType、voiceIdentity；本 chunk 没有对白或人物是哑巴时，同时省略这两个字段，不填空字符串或 null。使用完整字段名 voiceType、voiceIdentity。它们用于确定同一角色的基础音色与个体声音特征。
+- voiceType：需要填写声音时的必填字符串，只能从以下枚举中选一个最接近原文人物声音的基础类型，不能填空、null 或自造值：baby（婴儿音）、child（儿童音，性别未明确）、loli（萝莉音）、shota（正太音）、girl（少女音）、boy（少年音）、young_female（青年女声）、young_male（青年男声）、oneesan（御姐音）、mature_male（成熟男声）、mature_female（熟女音）、uncle（大叔音）、aunt（阿姨音）、grandpa（老者音）、granny（老妪音）、androgynous（中性音）、eunuch（太监音）、ethereal（空灵音）、divine（神性音）、demonic（魔物音）、robotic（机械音）。优先依据原文的声音描写；没有描写时，根据本 chunk 中可确认的年龄、性别、身份和气质选择最适合的声音设计，线索不足时选 androgynous。特殊类型按声音效果选择，不因角色是神、魔物或机器就强行使用；中性或特殊音色也不用于反推人物性别、年龄或身份。
+- voiceIdentity：需要填写声音时的必填非空中文字符串，描述在 voiceType 基础上微调的、相对稳定的个体声音特征，如音高、音色厚薄、明亮或暗哑、气声、共鸣、咬字、习惯语速及口音。有原文声音描写时忠实保留；描写不足或没有描写时，可结合本 chunk 人物特征设计不矛盾且适合角色的声音。只写可用于发声的描述，不重复人物履历、voiceType 名称，不写当前一句话的临时情绪、动作、对白或音效标签。补全仅属于声音设计，不把它写入 summary、identInfos 等事实字段，也不声称是原文明确描写。
+voiceType 提供基础类型，voiceIdentity 提供个体差异，二者不得矛盾。不得引用尚未发生的后文事实来设计声音。其他栏目不填写 voiceType、voiceIdentity。
 
 【身份匹配排除词 identityMatchStopNames】
 必须输出 identityMatchStopNames 数组，用来标记本批中不能单凭相同称呼确认同一身份的名称或别名。只收录当前批次人物 name/aliases 中实际出现的词，不能添加名单外的泛称。保留这些词作为人物 aliases，不要从人物记录中删除。
@@ -39,7 +39,7 @@ vt 提供基础类型，vi 提供个体差异，二者不得矛盾。不得引�
 输出前必须逐一检查本批人物的 name 和 aliases，再填写该字段；空数组表示已检查且无排除词，不表示跳过检查。无人物时返回 {"characters":[],"identityMatchStopNames":[]}。
 
 【输入与输出】
-下方格式中的 vt、vi 仅在满足人物声音填写条件时输出，否则同时省略。
+下方格式中的 voiceType、voiceIdentity 仅在满足人物声音填写条件时输出，否则同时省略。
 当前 chunk 原文见前面的带行号 user 消息；行号不属于正文。
 chunkIndex：{{{chunkIndex}}}；章节范围：{{{chapterRange}}}
 当前 chunk 之前的阅读记忆 memory：{{{memory}}}
@@ -48,4 +48,4 @@ chunkIndex：{{{chunkIndex}}}；章节范围：{{{chapterRange}}}
 只输出 JSON。本 chunk 无人物时，characters 返回 []；无人物时 identityMatchStopNames 也返回 []。人物形象只填写在 characterSpriteInfos 内。
 
 输出结构：
-{"characters":[{"name":"","importanceLevel":"CORE/HIGH/MEDIUM/LOW/TEMP","summary":"","identInfos":[],"aliases":["别名"],"lifeStatus":"","vt":"young_male","vi":"中低音，音色温润，咬字清晰，语速平稳。","characterSpriteInfos":[{"appearanceSummary":"","visualKeywords":[],"sex":""}]}],"identityMatchStopNames":[]}
+{"characters":[{"name":"","importanceLevel":"CORE/HIGH/MEDIUM/LOW/TEMP","summary":"","identInfos":[],"aliases":["别名"],"lifeStatus":"","voiceType":"young_male","voiceIdentity":"中低音，音色温润，咬字清晰，语速平稳。","characterSpriteInfos":[{"appearanceSummary":"","visualKeywords":[],"sex":""}]}],"identityMatchStopNames":[]}
