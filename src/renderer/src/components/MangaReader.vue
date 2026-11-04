@@ -22,7 +22,7 @@
  * 一次塞进侧栏会重演「界面挤爆」的老问题。
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { MangaChapter, MangaPanel, MangaPage, MangaSpeech, MangaViewData } from '../../../shared/manga-types'
+import type { MangaChapter, MangaDubbingClip, MangaPanel, MangaPage, MangaSpeech, MangaViewData } from '../../../shared/manga-types'
 
 const props = defineProps<{
   data: MangaViewData
@@ -47,9 +47,13 @@ interface Prefs {
   showFrames: boolean
   showSpeech: boolean
   autoPlay: boolean
-  /** 自动播放每句停留毫秒 */
+  /** 自动播放无配音时的停留毫秒（有配音时按配音时长） */
   autoMs: number
   speechScale: number
+  /** 是否播放台词配音 */
+  voiceOn: boolean
+  /** 配音音量 */
+  voiceVolume: number
   bgmOn: boolean
   bgmVolume: number
 }
@@ -61,6 +65,8 @@ const DEFAULT_PREFS: Prefs = {
   autoPlay: false,
   autoMs: 4000,
   speechScale: 1,
+  voiceOn: true,
+  voiceVolume: 0.9,
   bgmOn: false,
   bgmVolume: 0.35
 }
@@ -79,6 +85,11 @@ function loadPrefs(): Prefs {
       autoPlay: typeof o.autoPlay === 'boolean' ? o.autoPlay : DEFAULT_PREFS.autoPlay,
       autoMs: typeof o.autoMs === 'number' && o.autoMs >= 1000 ? o.autoMs : DEFAULT_PREFS.autoMs,
       speechScale: typeof o.speechScale === 'number' && o.speechScale >= 0.8 && o.speechScale <= 2 ? o.speechScale : 1,
+      voiceOn: typeof o.voiceOn === 'boolean' ? o.voiceOn : DEFAULT_PREFS.voiceOn,
+      voiceVolume:
+        typeof o.voiceVolume === 'number' && o.voiceVolume >= 0 && o.voiceVolume <= 1
+          ? o.voiceVolume
+          : DEFAULT_PREFS.voiceVolume,
       bgmOn: typeof o.bgmOn === 'boolean' ? o.bgmOn : DEFAULT_PREFS.bgmOn,
       bgmVolume: typeof o.bgmVolume === 'number' && o.bgmVolume >= 0 && o.bgmVolume <= 1 ? o.bgmVolume : DEFAULT_PREFS.bgmVolume
     }
@@ -132,6 +143,53 @@ const cues = computed<Cue[]>(() => {
 })
 
 const cue = computed<Cue | null>(() => cues.value[cursor.value] ?? null)
+
+/**
+ * 配音段索引：`order - 1000000` → clip。
+ *
+ * 【为什么是章内序号】实测 gmzz-10：clip 的 order 是**章内**从 1000000 连续递增，
+ * 而 `autoMs` 那种"每页固定几个 cue"的对齐方式对不上 —— 一句台词会被切成多段
+ * （12 条讲述 → 30 段配音）。所以播放配音必须按**句子段**推进，不能按 speech 推进。
+ * 详见 `src/main/manga-production/segments.ts` 顶部的实测证据。
+ */
+const clipBySegIndex = computed<Map<number, MangaDubbingClip>>(() => {
+  const m = new Map<number, MangaDubbingClip>()
+  const ch = chapter.value
+  if (!ch) return m
+  for (const c of props.data.dubbing) {
+    if (c.chapterSeq !== ch.chapterSeq) continue
+    m.set(c.order - 1_000_000, c)
+  }
+  return m
+})
+
+/**
+ * 当前 cue 对应的**第一段**配音（多段时按序播完再前进）。
+ *
+ * 一个 speech 可能被切成 N 段（如 58 字切成 16+42），所以要记录
+ * 「这条 speech 已播到第几段」，不能只取一段。
+ */
+const cueClipRange = computed<{ start: number; end: number } | null>(() => {
+  const c = cue.value
+  const ch = chapter.value
+  if (!c || !ch) return null
+  // 该 speech 前面有多少段：把本页此前所有 speech 的切分段数累加
+  const SPLIT = /(?<=[。！？])/
+  const segCountOf = (text: string): number =>
+    (text ?? '')
+      .split(SPLIT)
+      .map((s) => s.trim())
+      .filter(Boolean).length
+  let before = 0
+  for (const pn of page.value?.panels ?? []) {
+    for (const sp of pn.speech) {
+      if (sp === c.speech) return { start: before, end: before + segCountOf(sp.text) }
+      before += segCountOf(sp.text)
+    }
+  }
+  return null
+})
+
 /** 当前聚焦的分镜：优先台词所属格；本页无台词时退回第 1 格 */
 const focusPanel = computed<MangaPanel | null>(() => cue.value?.panel ?? page.value?.panels[0] ?? null)
 const focusPanelIdx = computed<number>(() => {
@@ -270,14 +328,19 @@ function nextPage(): void {
 }
 
 /** 前进到下一句台词；本页台词读完后自动翻页。一格模式与一页模式共用。 */
+/**
+ * 前进到下一句台词；本页台词读完后自动翻页。
+ * **手动推进也要配音**（用户报的就是「自动播放没配音」，但手动点也该有声音）。
+ * 自动播放进行中由 `autoRun` 自己驱动，这里不重复播，避免两句叠音。
+ */
 function nextCue(): void {
-  if (cursor.value < cues.value.length - 1) {
-    cursor.value++
-    return
-  }
-  nextPage()
+  const before = cursor.value
+  if (cursor.value < cues.value.length - 1) cursor.value++
+  else nextPage()
+  if (!prefs.value.autoPlay && cursor.value !== before) void playCurrentCueVoice()
 }
 
+/** 回退一句（不播配音：往回翻通常是找内容，出声反而吵） */
 function prevCue(): void {
   if (cursor.value > 0) {
     cursor.value--
@@ -290,30 +353,233 @@ function prevCue(): void {
   })
 }
 
-// ---- 自动播放 ----
+/**
+ * 播放「当前 cue」的配音（手动推进用）。
+ *
+ * 为什么单独一个薄封装：`playCueVoice` 依赖 computed 更新后的 cue，
+ * 而 cursor 刚改时 computed 可能还没重算，必须 `await nextTick()`。
+ */
+async function playCurrentCueVoice(): Promise<void> {
+  if (!prefs.value.voiceOn) return
+  await nextTick()
+  await playCueVoice()
+}
+
+// ---- 配音播放 + 自动播放 ----
+/**
+ * 配音播放器。
+ *
+ * 【为什么用「播放完成」而不是定时器】用户明确要求「按配音时长推进」。
+ * 定时器只能猜时长，猜短了会截断语音、猜长了会拖节奏；播完再前进才自然。
+ *
+ * 【但必须有超时兜底】音频加载失败、被自动播放策略拦下、或元数据异常时，
+ * `ended` 永远不来。若只等 `ended`，自动播放会**彻底卡死**（界面像挂了）。
+ * 所以每段都挂一个安全超时（按音频时长 + 2s 余量，读不到时长就用 autoMs）。
+ */
+const voiceEl = ref<HTMLAudioElement | null>(null)
+/** 正在播的配音段序号（-1 = 无） */
+const playingSeg = ref(-1)
+let voiceTimer: number | null = null
 let autoTimer: number | null = null
+/** 播放会话令牌：防止旧会话的回调影响新状态（切页/切句时会发生） */
+let voiceToken = 0
+
+function clearVoiceTimer(): void {
+  if (voiceTimer !== null) {
+    window.clearTimeout(voiceTimer)
+    voiceTimer = null
+  }
+}
+
+function stopVoice(): void {
+  voiceToken++
+  clearVoiceTimer()
+  const el = voiceEl.value
+  if (el) {
+    el.pause()
+    el.removeAttribute('src')
+    el.load()
+  }
+  playingSeg.value = -1
+}
+
 function clearAuto(): void {
   if (autoTimer !== null) {
     window.clearTimeout(autoTimer)
     autoTimer = null
   }
 }
-function scheduleAuto(): void {
+
+/**
+ * 播放某一段配音，返回它是否真的播完（或超时）。
+ *
+ * @param segIndex 章内段序号（= clip.order - 1000000）
+ */
+function playVoiceSegment(segIndex: number): Promise<boolean> {
+  const clip = clipBySegIndex.value.get(segIndex)
+  if (!clip?.url) return Promise.resolve(false)
+  const el = voiceEl.value
+  if (!el) return Promise.resolve(false)
+
+  const myToken = ++voiceToken
+  clearVoiceTimer()
+  playingSeg.value = segIndex
+
+  return new Promise<boolean>((resolve) => {
+    const settle = (ok: boolean): void => {
+      if (myToken !== voiceToken) return
+      clearVoiceTimer()
+      playingSeg.value = -1
+      resolve(ok)
+    }
+
+    el.onended = () => settle(true)
+    el.onerror = () => settle(false)
+    // 兜底超时：先给一个保守值，拿到元数据后再按真实时长重设
+    const armTimer = (ms: number): void => {
+      clearVoiceTimer()
+      voiceTimer = window.setTimeout(() => settle(false), ms)
+    }
+    armTimer(Math.max(3000, prefs.value.autoMs))
+    el.onloadedmetadata = () => {
+      const d = Number.isFinite(el.duration) && el.duration > 0 ? el.duration * 1000 : 0
+      if (d > 0) armTimer(d + 2000)
+    }
+
+    el.src = clip.url
+    el.volume = prefs.value.voiceVolume
+    void el.play().catch(() => settle(false))
+  })
+}
+
+/**
+ * 播放当前 cue 的整条配音（可能由多段组成），播完返回 true。
+ *
+ * 一个 speech 可能被切成多段（实测 58 字 → 16+42 两段），必须逐段播完，
+ * 否则会漏掉后半句。
+ */
+async function playCueVoice(): Promise<boolean> {
+  if (!prefs.value.voiceOn) return false
+  const range = cueClipRange.value
+  if (!range || range.end <= range.start) return false
+  for (let i = range.start; i < range.end; i++) {
+    // 中途被打断（切页/暂停）就停下
+    const tokenAtStart = voiceToken
+    const ok = await playVoiceSegment(i)
+    if (!ok && voiceToken === tokenAtStart) {
+      // 这一段播失败（无音频/加载失败）：继续尝试下一段，不整条放弃
+      continue
+    }
+    if (voiceToken !== tokenAtStart) return false
+  }
+  return true
+}
+
+/**
+ * 自动播放主循环。
+ *
+ * 【为什么是一个 while 循环 + 一个 generation 令牌】
+ * 之前的写法是「autoStep 播完 → nextCue() → cursor 变化触发 watch → 再调 autoStep」，
+ * 结果形成**自我打断的死锁**：
+ *   autoStep 等配音播完 → 播完调 nextCue → watch 触发 → scheduleAuto → clearAuto 把
+ *   定时器清了、又起一个新的 autoStep → 而旧的那个还在 await …
+ * 实测表现为「开了自动播放但一句都不推进」。
+ *
+ * 现在改为单一驱动：一个 `autoRun()` 内部 while 循环逐句推进，
+ * 用 `autoGeneration` 令牌判断是否该停（用户关掉/切页/手动操作即 +1）。
+ */
+let autoGeneration = 0
+/** 判断某次循环是否已过期（被用户操作打断） */
+const autoAlive = (gen: number): boolean => gen === autoGeneration && prefs.value.autoPlay
+
+/**
+ * 等待一段时间，可被 stopAutoLoop 打断。
+ *
+ * ⚠️ 被打断时必须 **resolve 而不是永远挂着**：`stopAutoLoop()` 会 `clearTimeout`，
+ * 若这里只是等 setTimeout 回调，promise 就再也不会 settle，
+ * 外层 `while` 循环卡死在 await 上（表现为「关掉自动播放后界面像卡住」）。
+ * 所以把 resolve 存在 `autoWake` 里，让 stopAutoLoop 能主动唤醒它。
+ */
+let autoWake: (() => void) | null = null
+function waitFor(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let settled = false
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      autoWake = null
+      resolve()
+    }
+    autoWake = finish
+    autoTimer = window.setTimeout(() => {
+      autoTimer = null
+      finish()
+    }, ms)
+  })
+}
+
+function stopAutoLoop(): void {
+  autoGeneration++
   clearAuto()
-  if (!prefs.value.autoPlay) return
-  autoTimer = window.setTimeout(() => {
+  // 主动唤醒可能正在 waitFor 的循环，避免它永久挂起
+  const wake = autoWake
+  autoWake = null
+  wake?.()
+}
+
+async function autoRun(): Promise<void> {
+  const gen = ++autoGeneration
+  while (autoAlive(gen)) {
+    // 末页末句 → 自动停止
     if (atLastPage.value && cursor.value >= cues.value.length - 1) {
       prefs.value.autoPlay = false
+      stopVoice()
       return
     }
-    nextCue()
-    scheduleAuto()
-  }, prefs.value.autoMs)
+
+    const range = cueClipRange.value
+    const hasVoice = !!prefs.value.voiceOn && !!range && range.end > range.start
+    if (hasVoice) {
+      await playCueVoice()
+      if (!autoAlive(gen)) return
+      // 配音播完后留一点呼吸感，避免两句紧贴（200ms 够，不影响节奏判断）
+      await waitFor(200)
+    } else {
+      await waitFor(prefs.value.autoMs)
+    }
+    if (!autoAlive(gen)) return
+
+    // 前进（注意：这里**不能**触发 scheduleAuto，否则又回到自我打断）
+    if (cursor.value < cues.value.length - 1) cursor.value++
+    else nextPage()
+  }
 }
+
+function scheduleAuto(): void {
+  stopAutoLoop()
+  if (!prefs.value.autoPlay) {
+    stopVoice()
+    return
+  }
+  void autoRun()
+}
+
+/** 只监听「开关」与「速度」这类配置变化；**不监听 cursor**（那会自我打断） */
 watch(
-  () => [prefs.value.autoPlay, prefs.value.autoMs, cursor.value, chIdx.value, pageIdx.value],
+  () => [prefs.value.autoPlay, prefs.value.autoMs, prefs.value.voiceOn],
   () => scheduleAuto()
 )
+
+/** 切页/切章时重启循环（这两者不是循环内部触发的） */
+watch([chIdx, pageIdx], () => {
+  if (prefs.value.autoPlay) scheduleAuto()
+  else stopVoice()
+})
+
+/** 手动切换台词时停掉正在播的语音（避免两句叠着播） */
+watch(cursor, () => {
+  if (!prefs.value.autoPlay) stopVoice()
+})
 
 // ---- 配乐（BGM） ----
 /**
@@ -389,6 +655,7 @@ async function restoreWindowFullScreen(): Promise<void> {
 // ---- 关闭 ----
 async function close(): Promise<void> {
   clearAuto()
+  stopVoice()
   if (bgmEl.value) bgmEl.value.pause()
   await restoreWindowFullScreen()
   emit('close')
@@ -442,12 +709,26 @@ function onKey(e: KeyboardEvent): void {
 }
 
 /**
- * 统一的「向前」动作：一格模式推进台词，一页模式翻页。
- * 鼠标点击与空格都走这里，保证两条路径行为完全一致。
+ * 统一的「向前」动作。
+ *
+ * 一页模式 = 翻页（用户口径：空格/左键任意位置翻页）；
+ * 一格模式 = 推进台词（自动切格）。
+ * 两者**都要播当前 cue 的配音** —— 之前只有一格模式播，
+ * 导致"翻页时没声音、自动播放时却有"，是不一致的。
  */
 function advance(): void {
-  if (prefs.value.mode === 'panel') nextCue()
-  else nextPage()
+  if (prefs.value.mode === 'panel') {
+    nextCue() // nextCue 内部会播配音
+    return
+  }
+  const before = pageIdx.value
+  const beforeCh = chIdx.value
+  nextPage()
+  // 真的换页了才播新页第一条的配音（到末页再点不该重复播）
+  if ((pageIdx.value !== before || chIdx.value !== beforeCh) && !prefs.value.autoPlay) {
+    cursor.value = 0
+    void playCurrentCueVoice()
+  }
 }
 
 /**
@@ -496,6 +777,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearAuto()
+  stopVoice()
   window.removeEventListener('keydown', onKey)
   if (ro) {
     ro.disconnect()
@@ -517,7 +799,22 @@ function chapterLabel(ch: MangaChapter): string {
 </script>
 
 <template>
-  <div class="mr-root" :class="['mr-dir-' + prefs.dir]" data-testid="manga-reader">
+  <!--
+    data-mode / data-voice / data-auto：把「当前状态」透出到 DOM 上。
+    抽屉关着时里面的开关不在 DOM 里，测试与调试都无法确认当前是哪种模式 ——
+    曾因此让 E2E 把「页模式」误判成「一格模式」，得出相反结论。
+    这些属性是只读观测点，不参与交互。
+  -->
+  <div
+    class="mr-root"
+    :class="['mr-dir-' + prefs.dir]"
+    data-testid="manga-reader"
+    :data-mode="prefs.mode"
+    :data-voice="prefs.voiceOn ? 'on' : 'off'"
+    :data-auto="prefs.autoPlay ? 'on' : 'off'"
+    :data-cursor="cursor"
+    :data-cues="cues.length"
+  >
     <!-- ===== 顶部：进度 + 退出（鼠标静止淡出） ===== -->
     <div class="mr-top">
       <div class="mr-top-left">
@@ -684,6 +981,23 @@ function chapterLabel(ch: MangaChapter): string {
             </label>
           </section>
 
+          <!-- 配音 -->
+          <section class="mr-sec">
+            <h4>配音</h4>
+            <label class="mr-row">
+              <input v-model="prefs.voiceOn" type="checkbox" data-testid="mr-voice-on" />
+              <span>播放台词配音（自动播放时按配音时长推进）</span>
+            </label>
+            <label class="mr-row">
+              <span class="mr-row-label">配音音量</span>
+              <input v-model.number="prefs.voiceVolume" type="range" min="0" max="1" step="0.05" data-testid="mr-voice-vol" />
+              <span class="mr-row-val">{{ Math.round(prefs.voiceVolume * 100) }}%</span>
+            </label>
+            <p class="mr-tip">
+              包内有配音时逐段播放，播完自动前进；没有配音的段落回落到下面的「无配音停留」时间。
+            </p>
+          </section>
+
           <!-- 自动播放 -->
           <section class="mr-sec">
             <h4>自动播放</h4>
@@ -692,7 +1006,7 @@ function chapterLabel(ch: MangaChapter): string {
               <span>自动推进台词</span>
             </label>
             <label class="mr-row">
-              <span class="mr-row-label">每句停留</span>
+              <span class="mr-row-label">无配音停留</span>
               <input v-model.number="prefs.autoMs" type="range" min="1500" max="12000" step="500" />
               <span class="mr-row-val">{{ (prefs.autoMs / 1000).toFixed(1) }}s</span>
             </label>
@@ -753,6 +1067,9 @@ function chapterLabel(ch: MangaChapter): string {
       @load="onImgLoad"
       @error="onImgError(page!.key)"
     />
+
+    <!-- 配音播放器（不进入布局；逐段播放台词 mp3） -->
+    <audio ref="voiceEl" class="mr-audio" data-testid="mr-voice-audio" preload="auto"></audio>
 
     <!-- BGM 播放器（不进入布局） -->
     <audio ref="bgmEl" class="mr-audio" data-testid="mr-bgm-audio" preload="none" loop></audio>

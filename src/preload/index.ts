@@ -75,6 +75,30 @@ export type {
   SceneTarget
 } from '../shared/imagegen-types'
 
+/**
+ * 把 Vue 响应式对象「拍平」成 IPC 能安全传输的普通值。
+ *
+ * 【为什么必须做】渲染层传进来的 `messages.value` / `params.value` 是 Vue 的
+ * `reactive`/`ref` **Proxy 对象**。Electron 的 IPC 用 structured clone 序列化参数，
+ * 遇到 Proxy 会抛：
+ *   `An object could not be cloned.`
+ * 这个错误在界面上表现为「点发送毫无反应 / 内置酒馆用不了」，且报错只在渲染进程
+ * 控制台里出现，主进程完全收不到请求 —— 很难从现象反推原因。
+ *
+ * 用 `JSON.parse(JSON.stringify())` 而不是 `structuredClone()`：后者对 Proxy
+ * 同样会抛；JSON 往返只保留纯数据（字符串/数字/布尔/null/数组/对象），
+ * 正是 IPC 需要的形状，也顺手丢掉 undefined 与函数。
+ */
+function toPlainData<T>(v: T): T {
+  if (v === null || v === undefined) return v
+  try {
+    return JSON.parse(JSON.stringify(v)) as T
+  } catch {
+    // 极端情况（含循环引用）退化为原值，让主进程给出更具体的错误
+    return v
+  }
+}
+
 const api = {
   /**
    * 导入并新建一本工作库（无条件新建、零提示；.t2w 与 .txt 完全同构）。
@@ -209,21 +233,23 @@ const api = {
    * PNG = SillyTavern 卡片（立绘 + tEXt 内嵌 V2/V3 JSON）；JSON = 独立文件。
    * 不传 outDir 时主进程弹目录选择框。
    */
-  cardExport: (req: CardExportRequest): Promise<CardExportResult> => ipcRenderer.invoke('card:export', req),
+  cardExport: (req: CardExportRequest): Promise<CardExportResult> =>
+    ipcRenderer.invoke('card:export', toPlainData(req)),
   /** 读酒馆设置（无则返回 null，由渲染层补默认） */
   tavernGetSettings: (): Promise<TavernSettings | null> => ipcRenderer.invoke('tavern:getSettings'),
-  /** 存酒馆设置 */
+  /** 存酒馆设置（拍平后再传，见 toPlainData 注释） */
   tavernSaveSettings: (s: TavernSettings): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('tavern:saveSettings', s),
-  /** 生成一条角色回复 */
+    ipcRenderer.invoke('tavern:saveSettings', toPlainData(s)),
+  /** 生成一条角色回复（messages/params 都是 Vue Proxy，必须拍平） */
   tavernGenerate: (req: TavernGenerateRequest): Promise<TavernGenerateResult> =>
-    ipcRenderer.invoke('tavern:generate', req),
+    ipcRenderer.invoke('tavern:generate', toPlainData(req)),
   /** 保存对话（按卡片 id 归并，一本书一套会话） */
   tavernSaveSession: (
     cardId: string,
     messages: TavernMessage[],
     params: TavernParams | null
-  ): Promise<TavernSaveResult> => ipcRenderer.invoke('tavern:saveSession', cardId, messages, params),
+  ): Promise<TavernSaveResult> =>
+    ipcRenderer.invoke('tavern:saveSession', cardId, toPlainData(messages), toPlainData(params)),
 
   // —— 漫画编排（讲述与配音 / 背景配乐 / 本页音色）——
   /** 取某一页的编排数据（段、配音状态、音色、配乐、概览） */
@@ -236,7 +262,7 @@ const api = {
     vi: string
     isNarrator: boolean
   }): Promise<{ ok: boolean; error?: string; created?: boolean }> =>
-    ipcRenderer.invoke('mangaProduction:saveVoice', input),
+    ipcRenderer.invoke('mangaProduction:saveVoice', toPlainData(input)),
   /**
    * 重新配音本页：逐段 TTS 合成后一次性写回 clip。
    * @param voiceMap characterId → 音色描述（作为 TTS 的 voice 提示）
@@ -246,7 +272,7 @@ const api = {
     pageNo: number,
     voiceMap: Record<string, string>
   ): Promise<{ ok: boolean; error?: string; updated?: number; synthesized?: number }> =>
-    ipcRenderer.invoke('mangaProduction:redub', chapterSeq, pageNo, voiceMap),
+    ipcRenderer.invoke('mangaProduction:redub', chapterSeq, pageNo, toPlainData(voiceMap)),
   /** 换章级配乐（写回 mangaMusic:chapter:* 的 selection.track） */
   mangaProductionSaveMusic: (input: {
     chapterSeq: number
@@ -260,7 +286,7 @@ const api = {
       attribution: string
     }
   }): Promise<{ ok: boolean; error?: string; updated?: number }> =>
-    ipcRenderer.invoke('mangaProduction:saveMusic', input)
+    ipcRenderer.invoke('mangaProduction:saveMusic', toPlainData(input))
 }
 
 export type FeatherApi = typeof api

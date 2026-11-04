@@ -37,7 +37,8 @@
     "verify:tavern-core": "node scripts/verify-tavern-core.mjs",
     "verify:cards-ui": "node scripts/verify-cards-ui.mjs",
     "verify:manga-production": "node scripts/verify-manga-production.mjs",
-    "verify:manga-production-ui": "node scripts/verify-manga-production-ui.mjs"
+    "verify:manga-production-ui": "node scripts/verify-manga-production-ui.mjs",
+    "verify:manga-voice": "node scripts/verify-manga-voice.mjs"
   },
   "dependencies": {},
   "devDependencies": {
