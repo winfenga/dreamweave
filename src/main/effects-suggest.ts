@@ -14,7 +14,7 @@
 import { loadCatalog } from './effects/catalog'
 import { validateBaseURL } from './settings/store'
 import { activeProvider } from './pipeline/providers'
-import { buildRequestBody, endpointOf } from './pipeline/llm-client'
+import { buildRequestBody, endpointOf, readChatCompletion } from './pipeline/llm-client'
 import type { ChatMessage, LlmProvider } from '../shared/pipeline-types'
 import type {
   EffectCatalogEntry,
@@ -266,22 +266,11 @@ export async function suggestEffects(input: EffectSuggestInput): Promise<EffectS
     return { ok: false, error: `特效推荐上游返回 ${res.status}${detail ? `：${detail}` : ''}` }
   }
 
-  let parsed: unknown
-  try {
-    parsed = await res.json()
-  } catch (e) {
-    return { ok: false, error: `特效推荐响应非 JSON：${(e as Error).message}` }
-  }
-
-  const content = (() => {
-    if (!parsed || typeof parsed !== 'object') return ''
-    const choices = (parsed as Record<string, unknown>).choices
-    if (!Array.isArray(choices) || !choices.length) return ''
-    const msg = (choices[0] as Record<string, unknown>)?.message as Record<string, unknown> | undefined
-    const c = msg?.content
-    return typeof c === 'string' ? c : ''
-  })()
-  if (!content) return { ok: false, error: '特效推荐响应缺少 choices[0].message.content' }
+  // 统一走共享入口：上游可能无视 stream:false 回 SSE（实测本地网关如此），
+  // 直接 res.json() 会抛「响应非 JSON」。
+  const read = await readChatCompletion(res)
+  if (!read.ok) return { ok: false, error: `特效推荐${read.error}` }
+  const content = read.content
 
   const raw = parseSuggestions(content)
   const { kept, dropped } = whitelist(raw, entries, input.characterIds)

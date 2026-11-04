@@ -14,7 +14,7 @@
  * - 任何失败返回 null，调用方继续用正则结果。
  */
 import { activeProvider } from '../pipeline/providers'
-import { buildRequestBody, endpointOf } from '../pipeline/llm-client'
+import { buildRequestBody, endpointOf, readChatCompletion } from '../pipeline/llm-client'
 import type { LlmProvider } from '../../shared/pipeline-types'
 import { renderPrompt } from '../pipeline/prompt-loader'
 import { validateBaseURL } from '../settings/store'
@@ -72,22 +72,12 @@ export async function recognizeChaptersByLlm(
   } catch {
     return null
   }
-  if (!res.ok) return null
-  let parsed: unknown
-  try {
-    parsed = await res.json()
-  } catch {
-    return null
-  }
-  const content = (() => {
-    if (!parsed || typeof parsed !== 'object') return ''
-    const choices = (parsed as Record<string, unknown>).choices
-    if (!Array.isArray(choices) || !choices.length) return ''
-    const msg = (choices[0] as Record<string, unknown>)?.message as Record<string, unknown> | undefined
-    const c = msg?.content
-    return typeof c === 'string' ? c : ''
-  })()
-  if (!content) return null
+  // 统一走共享入口：上游可能无视 stream:false 回 SSE（实测本地网关如此），
+  // 直接 res.json() 会抛「响应非 JSON」。本函数的上层契约是「失败返回 null」，
+  // 所以这里只取 content，错误细节不外泄。
+  const read = await readChatCompletion(res)
+  if (!read.ok) return null
+  const content = read.content
 
   // ---- 5. 校验 ----
   const result = parseRecognitionJson(content)

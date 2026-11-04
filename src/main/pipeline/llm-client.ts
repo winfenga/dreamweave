@@ -175,9 +175,20 @@ export async function singleChat(
   } catch {
     text = ''
   }
+  // ⚠️ 上游可能**无视 `stream:false`** 直接回 SSE。实测本地 workbuddy 网关
+  // （buddy:deepseek-v4.1-flash）就是如此：请求体明确 `stream:false`，
+  // 响应却是 `Content-Type: text/event-stream` + `data: {...}` 分帧。
+  //
+  // 若直接 JSON.parse 得到 null，会引发两个**都很致命**的连锁症状：
+  //   1) 探活 → 报「端点可达但响应不可解析（非 JSON）」，看起来像配错了；
+  //   2) 正式任务 → `getChoices(null)` 返回空数组 → 报「响应缺少 choices[0].message.content」，
+  //      整条流水线在这个端点上完全不可用。
+  // 端点本身是好的，所以这里先把 SSE 聚合成等价的一次性 completion 再走后续逻辑。
+  const sse = parseSseCompletion(text, res.headers.get('content-type'))
+  const bodyText = sse ? JSON.stringify(sse) : text
   let parsed: unknown = null
   try {
-    parsed = text ? JSON.parse(text) : null
+    parsed = bodyText ? JSON.parse(bodyText) : null
   } catch {
     parsed = null
   }
@@ -286,6 +297,79 @@ export function isLikelyContentBlocked(content: string): boolean {
   return content.trim().length < CONTENT_BLOCKED_MIN_CHARS
 }
 
+/**
+ * 把 SSE（`text/event-stream`）响应聚合成**与非流式等价的一次性 completion**。
+ *
+ * 为什么需要它：`stream:false` 并不是所有网关都遵守。不认这个字段的上游会直接回
+ * `data: {chunk}\n\n…data: [DONE]`，此时 `JSON.parse` 整体必然失败。
+ * 我们不做真流式消费（任务都是「拿完整结果再解析 JSON」），所以这里只把分片里的
+ * `delta.content` 按顺序拼起来，再套回标准 `choices[0].message.content` 结构，
+ * 让调用方对 SSE / 非 SSE 完全无感。
+ *
+ * 判定条件是**内容形状**而不是只看 Content-Type：有的网关 Content-Type 写着
+ * `application/json` 却回 SSE 帧，也有的反过来。两者任一命中即按 SSE 处理。
+ *
+ * 返回 `null` 表示「这段文本不是 SSE」，调用方照常按普通 JSON 解析。
+ */
+export function parseSseCompletion(raw: string, contentType?: string | null): unknown | null {
+  if (!raw) return null
+  const head = raw.slice(0, 200)
+  const looksSse = /^data:\s/m.test(head) || (contentType ?? '').toLowerCase().includes('text/event-stream')
+  if (!looksSse) return null
+
+  let content = ''
+  let id = ''
+  let model = ''
+  let finishReason: string | null = null
+  let usage: unknown = null
+  let sawChunk = false
+
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim()
+    if (!t.startsWith('data:')) continue
+    const payload = t.slice(5).trim()
+    if (!payload || payload === '[DONE]') continue
+    let chunk: unknown
+    try {
+      chunk = JSON.parse(payload)
+    } catch {
+      // 单帧坏掉不该让整段作废，跳过即可
+      continue
+    }
+    if (!chunk || typeof chunk !== 'object') continue
+    sawChunk = true
+    const c = chunk as Record<string, unknown>
+    if (typeof c.id === 'string') id = c.id
+    if (typeof c.model === 'string') model = c.model
+    if (c.usage && typeof c.usage === 'object') usage = c.usage
+    const choices = Array.isArray(c.choices) ? c.choices : []
+    const first = choices[0] as Record<string, unknown> | undefined
+    if (!first) continue
+    const delta = first.delta as Record<string, unknown> | undefined
+    const piece = delta?.content
+    if (typeof piece === 'string') content += piece
+    const fr = first.finish_reason
+    if (typeof fr === 'string' && fr) finishReason = fr
+  }
+
+  // 一帧都没解析出来 → 不是我们认识的 SSE，交回普通路径，由它产出原始错误
+  if (!sawChunk) return null
+
+  return {
+    id,
+    model,
+    object: 'chat.completion',
+    choices: [
+      {
+        index: 0,
+        message: { role: 'assistant', content },
+        finish_reason: finishReason
+      }
+    ],
+    usage
+  }
+}
+
 function getChoices(parsed: unknown): unknown[] {
   if (!parsed || typeof parsed !== 'object') return []
   const c = (parsed as Record<string, unknown>).choices
@@ -298,6 +382,61 @@ function extractContent(choices: unknown[]): string | null {
   const c = msg?.content
   return typeof c === 'string' ? c : null
 }
+
+/**
+ * 读取一次 chat/completions 响应并取出正文 —— **所有非流式调用方的唯一入口**。
+ *
+ * 存在理由：本仓有 4 个功能各自直接 `fetch` chat/completions
+ * （`pipeline/llm-client`、`effects-suggest`、`imagegen/prompt-rewrite`、
+ * `workspace/chapter-recognition-llm`）。它们都要面对同一个现实：
+ * 上游可能无视 `stream:false` 回 SSE（本地 workbuddy 网关实测如此）。
+ *
+ * 之前每处都写 `await res.json()`，于是**四处一起坏**：JSON 解析直接抛
+ * 「响应非 JSON：Unexpected token 'd', "data: {"id"…」。
+ * 把它收敛到这里，是为了让「认不认 SSE」只由一处决定，新调用方也不会再各自踩坑。
+ *
+ * @returns `ok:false` 时 `error` 已是可读中文（含上游状态码 / 截断正文）。
+ */
+export async function readChatCompletion(
+  res: Response
+): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
+  if (!res.ok) {
+    let detail = ''
+    try {
+      detail = (await res.text()).slice(0, 300)
+    } catch {
+      // 读取失败不影响错误信息本身
+    }
+    return { ok: false, error: `上游返回 ${res.status}${detail ? `：${detail}` : ''}` }
+  }
+
+  let text = ''
+  try {
+    text = await res.text()
+  } catch {
+    text = ''
+  }
+
+  // 先按 SSE 尝试聚合；不是 SSE 则原样 JSON 解析
+  const sse = parseSseCompletion(text, res.headers.get('content-type'))
+  let parsed: unknown = sse
+  if (sse === null) {
+    try {
+      parsed = text ? JSON.parse(text) : null
+    } catch {
+      parsed = null
+    }
+  }
+  if (parsed === null) {
+    return { ok: false, error: `响应不可解析（非 JSON，也非 SSE）：${text.slice(0, 200)}` }
+  }
+
+  const content = extractContent(getChoices(parsed))
+  if (content === null) return { ok: false, error: '响应缺少 choices[0].message.content' }
+  if (!content.trim()) return { ok: false, error: '响应内容为空' }
+  return { ok: true, content }
+}
+
 
 /** 默认重试策略：storyScript 最多 2 次、其它最多 3 次。 */
 export function defaultRetry(taskId?: string): { maxRetries: number; backoffMs: readonly number[] } {

@@ -25,7 +25,7 @@ import {
   type RewriteResult
 } from './prompt-rewrite'
 import { activeProvider } from '../pipeline/providers'
-import { buildRequestBody, endpointOf } from '../pipeline/llm-client'
+import { buildRequestBody, endpointOf, readChatCompletion } from '../pipeline/llm-client'
 import { validateBaseURL } from '../settings/store'
 import type { LlmProvider } from '../../shared/pipeline-types'
 import { readImagegenTargets } from './data'
@@ -71,30 +71,11 @@ async function rewritePrompt(
   } catch (e) {
     return { prompt: null, negative: null, ratio: null, error: `改写请求失败：${(e as Error).message}` }
   }
-  if (!res.ok) {
-    let detail = ''
-    try {
-      detail = (await res.text()).slice(0, 200)
-    } catch {
-      // 忽略
-    }
-    return { prompt: null, negative: null, ratio: null, error: `改写上游返回 ${res.status}${detail ? `：${detail}` : ''}` }
-  }
-  let parsed: unknown
-  try {
-    parsed = await res.json()
-  } catch (e) {
-    return { prompt: null, negative: null, ratio: null, error: `改写响应非 JSON：${(e as Error).message}` }
-  }
-  const content = (() => {
-    if (!parsed || typeof parsed !== 'object') return ''
-    const choices = (parsed as Record<string, unknown>).choices
-    if (!Array.isArray(choices) || !choices.length) return ''
-    const msg = (choices[0] as Record<string, unknown>)?.message as Record<string, unknown> | undefined
-    const c = msg?.content
-    return typeof c === 'string' ? c : ''
-  })()
-  if (!content) return { prompt: null, negative: null, ratio: null, error: '改写响应缺少 choices[0].message.content' }
+  // 统一走共享入口：上游可能无视 stream:false 回 SSE（实测本地网关如此），
+  // 直接 res.json() 会抛「响应非 JSON」。
+  const read = await readChatCompletion(res)
+  if (!read.ok) return { prompt: null, negative: null, ratio: null, error: `改写${read.error}` }
+  const content = read.content
 
   const r = parseRewriteJson(content)
   if (!r.prompt) return { prompt: null, negative: null, ratio: null, error: '改写结果里没有 rewritten_prompt' }
