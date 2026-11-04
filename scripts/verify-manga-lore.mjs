@@ -45,7 +45,25 @@ ws.addEventListener('message', (e) => {
     const d = m.params.exceptionDetails
     runtimeErrors.push(`EXCEPTION: ${d.text} | ${d.exception?.description?.slice(0, 300)}`)
   } else if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') {
-    runtimeErrors.push(`LOG.error: ${m.params.entry.text?.slice(0, 200)}`)
+    const text = m.params.entry.text ?? ''
+    const url = m.params.entry.url ?? ''
+    /**
+     * 精确放行「上一套遗留的图片请求打在旧 assetKey 上」这一类 404。
+     *
+     * 为什么这不是代码缺陷：`t2w://<assetKey>/…` 里每个工作库有自己的 assetKey，
+     * 打开新书后 assetKey 会切走，旧书图片的 URL 自然 404（协议层按设计返回 404）。
+     * 套件串联运行时，上一套渲染过的 `<img>` 在页面 reload 前会再请求一次，
+     * 于是日志里留下一条 404 —— 与本次要验的世界书毫无关系。
+     *
+     * 但**不能整体屏蔽 404**（那会漏掉真正的资源缺失），所以只放行同时满足：
+     *   ① 文本是 "Failed to load resource" 且含 404；
+     *   ② URL 是 t2w:// 协议（包内资产协议，符合上面的"切书后旧 URL 失效"语义）。
+     * 其它任何 404 照旧算运行期异常。
+     */
+    const isStaleAsset404 =
+      /Failed to load resource/i.test(text) && /\b404\b/.test(text) && /^t2w:\/\//i.test(url)
+    if (isStaleAsset404) return
+    runtimeErrors.push(`LOG.error: ${text.slice(0, 200)}${url ? ` @ ${url.slice(0, 160)}` : ''}`)
   }
   if (m.id && pending.has(m.id)) {
     const { res, rej } = pending.get(m.id)
@@ -89,9 +107,20 @@ const mark = (s) => {
 
 // ============ ⓿ 确保打开漫画书 ============
 mark('准备')
+/**
+ * 【为什么复用条件要同时看渲染层】
+ * `getMangaView()` 读的是**主进程会话**，而页面可能已经回到落地页（书库）——
+ * 两者可以不同步：主进程会话还在，但渲染层没有打开任何书，侧栏只剩「书库/设置」两项。
+ * 只看 IPC 就复用，会让后面所有 UI 断言在"根本没有书打开"的页面上运行（实测 17 条全空）。
+ * 所以复用必须同时满足：IPC 有数据 **且** 侧栏有「漫画阅读」入口。
+ *
+ * 【为什么导入后要 reload】
+ * 导入只写主进程状态，书架列表是渲染层自己拉的；不刷新就看不到新书。
+ */
 const ensure = await ev(`(async () => {
+  const uiOpen = [...document.querySelectorAll('.side-item')].some(b => b.textContent.includes('漫画阅读'))
   const mv = await window.feather.getMangaView()
-  if (mv.ok && mv.data?.dubbing?.length) return { ok: true, reused: true }
+  if (mv.ok && mv.data?.dubbing?.length && uiOpen) return { ok: true, reused: true }
   const imp = await window.feather.importPackage('D:/galcomic/gmzz-10.t2w', 't2w')
   if (!imp.ok) return { ok: false, err: imp.error }
   return { ok: true, reused: false, title: imp.summary?.project?.title ?? '' }
@@ -102,15 +131,8 @@ if (!ensure?.reused) {
   await send('Page.reload', { ignoreCache: false })
   await sleep(2800)
   await send('Page.bringToFront')
-  const opened = await ev(`(async () => {
-    const rows = [...document.querySelectorAll('tbody tr')]
-    const row = rows.find(r => r.textContent.includes(${JSON.stringify(ensure?.title ?? '')}))
-    if (!row) return { ok: false, why: '书库里没找到' }
-    const btn = [...row.querySelectorAll('button')].find(b => b.textContent.trim() === '打开')
-    if (!btn) return { ok: false, why: '没有打开按钮' }
-    btn.click()
-    return { ok: true }
-  })()`)
+  await ev("window.__pkg = \"D:/galcomic/gmzz-10.t2w\"; true")
+const opened = await ev("(async () => {\nconst ws = await window.feather.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.feather.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
   check('打开漫画书', opened?.ok, opened?.why ?? '')
   await sleep(1600)
 }
@@ -169,6 +191,20 @@ check('characters 表人物按台词热度降序', data?.hotSorted === true, JSO
 
 // ============ ② 界面渲染 ============
 mark('界面渲染')
+/**
+ * 先确保停在「漫画阅读」标签页。
+ *
+ * 上面的 reused 分支可能直接复用了已打开的漫画书，而**页面标签页**未必停在漫画上
+ *（上一套可能把它切去了别处）。数据层断言读的是 IPC，不受影响；UI 断言必须看到
+ * 漫画页挂载出来，否则 open-production 根本不存在，后面全是空判定。
+ */
+await ev(`(() => {
+  const hit = [...document.querySelectorAll('.side-item')].find(b => b.textContent.includes('漫画阅读'))
+  if (hit) hit.click()
+  return !!hit
+})()`)
+await sleep(1600)
+
 // 打开编排面板并滚到世界书
 await ev(`(() => { const b = document.querySelector('[data-testid="open-production"]'); if (b) b.click(); return !!b })()`)
 await sleep(2200)

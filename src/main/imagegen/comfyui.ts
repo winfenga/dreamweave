@@ -49,6 +49,64 @@ function readableFetchError(prefix: string, e: unknown): Error {
   return new Error(`${prefix}：${msg}`)
 }
 
+/**
+ * 列出 ComfyUI 上可用的**出图模型**（`ckpt_name` 候选）。
+ *
+ * 走 ComfyUI 标准信息接口 `GET /object_info/CheckpointLoaderSimple`：
+ * 其 `input.required.ckpt_name[0]` 就是当前已安装的 checkpoint 名单数组。
+ *
+ * 【为什么值得单独做】设置页里「出图模型名（ckpt_name）」原本只能手抄，
+ * 而 checkpoint 文件名往往带版本/精度/作者前缀（如 `qwen-image-1.0-fp8.safetensors`），
+ * 抄错一个字就是一句「模型不存在」。列出候选让用户点选，直接消掉这类错误。
+ *
+ * 兼容性：该接口形状随 ComfyUI 版本略有差异，故按「找 ckpt_name 的字符串数组」
+ * 宽松解析而非死抠字段路径；找不到就返回可读错误，**不猜**。
+ */
+export async function listComfyuiModels(
+  baseUrl: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<{ ok: boolean; models?: string[]; error?: string }> {
+  const base = trimBase(baseUrl)
+  let res: Response
+  try {
+    res = await fetchImpl(`${base}/object_info/CheckpointLoaderSimple`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(10_000)
+    })
+  } catch (e) {
+    return { ok: false, error: readableFetchError('探测模型失败', e).message }
+  }
+  if (!res.ok) return { ok: false, error: `探测模型失败：HTTP ${res.status} ${res.statusText}` }
+  let j: unknown
+  try {
+    j = await res.json()
+  } catch {
+    return { ok: false, error: '探测模型失败：响应不是 JSON（ComfyUI 版本可能过旧）' }
+  }
+  const models = findCkptNames(j)
+  if (!models.length) {
+    return { ok: false, error: '探测模型失败：没有找到任何 checkpoint（models/checkpoints 目录为空？）' }
+  }
+  return { ok: true, models: [...models].sort((a, b) => a.localeCompare(b)) }
+}
+
+/** 递归找 ckpt_name 的候选清单（形状随版本变，只认「非空字符串数组」）。 */
+function findCkptNames(node: unknown, depth = 0): string[] {
+  if (depth > 8 || !node || typeof node !== 'object') return []
+  const o = node as Record<string, unknown>
+  // 命中：ckpt_name: [ ["a.safetensors", …], {…} ]
+  const ck = o.ckpt_name
+  if (Array.isArray(ck) && Array.isArray(ck[0])) {
+    const arr = ck[0].filter((x): x is string => typeof x === 'string' && !!x.trim())
+    if (arr.length) return arr
+  }
+  for (const v of Object.values(o)) {
+    const hit = findCkptNames(v, depth + 1)
+    if (hit.length) return hit
+  }
+  return []
+}
+
 /** 探活：GET /system_stats。成功返回可读摘要。 */
 export async function probeComfyui(
   baseUrl: string,

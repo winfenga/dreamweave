@@ -94,8 +94,11 @@ mark('准备数据')
  * 所以这里：先看当前书有没有 manga 数据；没有就导入测试包并打开它。
  */
 const ensureBook = await ev(`(async () => {
+  // 复用条件必须同时看**渲染层**：主进程会话可能还在，但页面已回到落地页（书库），
+  // 那时侧栏没有「漫画阅读」入口，后续 UI 断言会在"没打开任何书"的页面上跑。
+  const uiOpen = [...document.querySelectorAll('.side-item')].some(b => b.textContent.includes('漫画阅读'))
   let mv = await window.feather.getMangaView()
-  if (mv.ok && mv.data && mv.data.dubbing.length > 0) {
+  if (mv.ok && mv.data && mv.data.dubbing.length > 0 && uiOpen) {
     return { ok: true, reused: true, title: '(当前已打开)' }
   }
   // 导入漫画包（同路径重复导入会新建工作库，无妨）
@@ -109,15 +112,8 @@ if (ensureBook?.needReload) {
   await send('Page.reload', { ignoreCache: false })
   await sleep(2800)
   await send('Page.bringToFront')
-  const opened = await ev(`(async () => {
-    const rows = [...document.querySelectorAll('tbody tr')]
-    const row = rows.find(r => r.textContent.includes(${JSON.stringify(ensureBook.title ?? '')}))
-    if (!row) return { ok: false, why: '书库里没找到刚导入的书' }
-    const btn = [...row.querySelectorAll('button')].find(b => b.textContent.trim() === '打开')
-    if (!btn) return { ok: false, why: '没有「打开」按钮' }
-    btn.click()
-    return { ok: true }
-  })()`)
+  await ev("window.__pkg = \"D:/galcomic/gmzz-10.t2w\"; true")
+const opened = await ev("(async () => {\nconst ws = await window.feather.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.feather.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
   check('打开漫画书', opened?.ok, opened?.why ?? '')
   await sleep(1600)
   await ev(`(() => { const hit = [...document.querySelectorAll('.side-item')].find(b => b.textContent.includes('漫画阅读')); if (hit) hit.click(); return !!hit })()`)

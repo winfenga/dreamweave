@@ -2,17 +2,23 @@
 /**
  * 通用「多组接入配置」编辑器（LLM 与 TTS 共用）。
  *
- * 由 `kind` + 若干开关控制差异，所有增删改/选「当前使用」/逐行探活/失败切换顺序逻辑**只写一处**：
- * - `kind='llm'`：显示「检测连接」+ 供应商类型 + 失败切换顺序；不显示音色。
- * - `kind='tts'`：显示音色；**不显示**「检测连接」（本机聚合服务不支持 /audio/speech）。
+ * 由 `kind` + 若干开关控制差异，所有增删改/选「当前使用」/逐行探活/模型探测/失败切换顺序
+ * 逻辑**只写一处**：
+ * - `kind='llm'`：显示「检测连接」+「探测模型」+ 供应商类型 + 失败切换顺序；不显示音色。
+ * - `kind='tts'`：显示音色 + 「检测连接」（**用 /audio/speech 探**，见 providers.ts 说明）。
+ *
+ * 【两种测试的分工，别混】
+ *   - **检测连接**（probeProvider）：用已填 model 真发一次请求 → 「这组现在能跑吗」；
+ *   - **探测模型**（listModels）：GET /models 列模型 → 「这个端点有哪些模型可选」。
+ * 填 model 之前探活必然失败，那时恰恰最需要看模型名单，所以两个都要有。
  *
  * 持久化：组件**自持状态**，每次结构变更即落盘；落盘前**重新读取**全量 provider 设置、
  * 只覆盖自己的那一侧（llm 或 tts），因此**绝不会清空/覆盖另一侧**。
  * fail 时本地回滚，保持界面与磁盘一致。
  *
  * testid 约定：`<prefix>-row-<id>` / `<prefix>-active-<id>` / `<prefix>-probe-<id>` /
- * `<prefix>-probe-result-<id>` / `<prefix>-edit-<id>` / `<prefix>-del-<id>` /
- * `<prefix>-add` / `<prefix>-form(-*)`（`prefix = testidPrefix`，llm 时保持既往 testid 不变）。
+ * `<prefix>-probe-result-<id>` / `<prefix>-models-<id>` / `<prefix>-models-result-<id>` /
+ * `<prefix>-edit-<id>` / `<prefix>-del-<id>` / `<prefix>-add` / `<prefix>-form(-*)`
  */
 import { computed, onMounted, ref } from 'vue'
 import type { LlmProvider, TtsProvider } from '../../../shared/pipeline-types'
@@ -27,8 +33,10 @@ const props = withDefaults(
     hint?: string
     /** testid 前缀（'llm' | 'tts'） */
     testidPrefix: string
-    /** 是否显示「检测连接」按钮（llm=true） */
+    /** 是否显示「检测连接」按钮（llm/tts 都显示；tts 走 /audio/speech 探） */
     showProbe?: boolean
+    /** 是否显示「探测模型」按钮（只有 LLM 有意义：TTS 端点通常不提供 /models） */
+    showModels?: boolean
     /** 是否显示音色字段（tts=true） */
     showVoice?: boolean
     /** 是否显示供应商类型（llm=true） */
@@ -43,6 +51,7 @@ const props = withDefaults(
   {
     hint: '',
     showProbe: false,
+    showModels: false,
     showVoice: false,
     showProviderKind: false,
     showChain: false,
@@ -85,6 +94,103 @@ const probeStates = ref<Record<string, ProbeState>>({})
 const probeOf = (id: string): ProbeState => probeStates.value[id] ?? { state: 'idle', text: '' }
 const setProbe = (id: string, next: ProbeState): void => {
   probeStates.value = { ...probeStates.value, [id]: next }
+}
+
+/**
+ * 每行「探测模型」结果。
+ *
+ * `models` 非空时界面渲染成可点的芯片：点一下直接把该模型名填进对应配置，
+ * 免得用户手抄长模型名（实测有 `buddy:deepseek-v4.1-flash` 这种，手抄必错）。
+ */
+interface ModelsState {
+  state: 'idle' | 'loading' | 'ok' | 'err'
+  text: string
+  models: string[]
+  owners: Record<string, string>
+}
+const EMPTY_MODELS: ModelsState = { state: 'idle', text: '', models: [], owners: {} }
+const modelsStates = ref<Record<string, ModelsState>>({})
+const modelsOf = (id: string): ModelsState => modelsStates.value[id] ?? EMPTY_MODELS
+const setModels = (id: string, next: ModelsState): void => {
+  modelsStates.value = { ...modelsStates.value, [id]: next }
+}
+
+/** 探测模型并列出候选（不需要先填 model） */
+async function listModelsOfRow(p: TtsProvider): Promise<void> {
+  if (modelsOf(p.id).state === 'loading') return
+  if (!p.baseURL.trim()) {
+    setModels(p.id, { state: 'err', text: '请先填 Base URL', models: [], owners: {} })
+    return
+  }
+  setModels(p.id, { state: 'loading', text: '探测中…', models: [], owners: {} })
+  try {
+    const r = await window.feather.listModels({ id: p.id })
+    if (r.ok && r.models?.length) {
+      const owners = r.owners ?? {}
+      const ownerCount = new Set(Object.values(owners).filter(Boolean)).size
+      const time = r.ms ? ` · ${r.ms} ms` : ''
+      const ownerText = ownerCount > 1 ? ` · ${ownerCount} 个归属` : ''
+      setModels(p.id, {
+        state: 'ok',
+        text: `✅ 发现 ${r.models.length} 个模型${ownerText}${time}`,
+        models: r.models,
+        owners
+      })
+    } else {
+      setModels(p.id, { state: 'err', text: `❌ ${r.error ?? '未发现任何模型'}`, models: [], owners: {} })
+    }
+  } catch (e) {
+    setModels(p.id, { state: 'err', text: `❌ ${(e as Error).message}`, models: [], owners: {} })
+  }
+}
+
+/** 一键把探测到的模型名填进该行配置（手抄长模型名容易错） */
+async function useModel(p: TtsProvider, model: string): Promise<void> {
+  const prev = snapshot()
+  p.model = model
+  setModels(p.id, { ...modelsOf(p.id), text: `已填入模型：${model}` })
+  const r = await persist()
+  if (!r.ok) {
+    error.value = r.error ?? '保存失败'
+    restore(prev)
+    return
+  }
+  // 模型变了 → 旧的探活结论已失效，清掉避免误导
+  setProbe(p.id, { state: 'idle', text: '' })
+}
+
+/**
+ * 表单里的模型探测：直接拿**还没保存**的 baseURL/apiKey 去问，
+ * 于是「先填地址→探测→挑模型→保存」是顺畅的一条线，不必先保存一次再看。
+ */
+const formModels = ref<ModelsState>(EMPTY_MODELS)
+
+async function listModelsForForm(): Promise<void> {
+  const f = form.value
+  if (!f) return
+  if (formModels.value.state === 'loading') return
+  if (!f.baseURL.trim()) {
+    formModels.value = { state: 'err', text: '请先填 Base URL', models: [], owners: {} }
+    return
+  }
+  formModels.value = { state: 'loading', text: '探测中…', models: [], owners: {} }
+  try {
+    const r = await window.feather.listModels({ baseURL: f.baseURL.trim(), apiKey: f.apiKey })
+    if (r.ok && r.models?.length) {
+      const owners = r.owners ?? {}
+      const time = r.ms ? ` · ${r.ms} ms` : ''
+      formModels.value = {
+        state: 'ok',
+        text: `✅ 发现 ${r.models.length} 个模型${time}`,
+        models: r.models,
+        owners
+      }
+    } else {
+      formModels.value = { state: 'err', text: `❌ ${r.error ?? '未发现任何模型'}`, models: [], owners: {} }
+    }
+  } catch (e) {
+    formModels.value = { state: 'err', text: `❌ ${(e as Error).message}`, models: [], owners: {} }
+  }
 }
 
 /** 配置是否"未填完整"（baseURL/model 任一为空 → 不可用） */
@@ -175,6 +281,7 @@ function newId(): string {
 function startAdd(): void {
   form.value = { id: null, label: '', baseURL: '', apiKey: '', model: '', providerKind: 'custom', voice: '' }
   formError.value = ''
+  formModels.value = EMPTY_MODELS
 }
 function startEdit(p: TtsProvider): void {
   form.value = {
@@ -187,10 +294,12 @@ function startEdit(p: TtsProvider): void {
     voice: p.voice ?? ''
   }
   formError.value = ''
+  formModels.value = EMPTY_MODELS
 }
 function cancelForm(): void {
   form.value = null
   formError.value = ''
+  formModels.value = EMPTY_MODELS
 }
 
 /** 提交表单：先本地套用再落盘；主进程会用 validateBaseURL 复校（renderer 无法直用主进程校验） */
@@ -372,6 +481,16 @@ async function probeRow(p: TtsProvider): Promise<void> {
         >
           {{ probeOf(p.id).state === 'loading' ? '检测中…' : '检测连接' }}
         </button>
+        <button
+          v-if="showModels"
+          class="btn"
+          :data-testid="testidPrefix + '-models-' + p.id"
+          :disabled="modelsOf(p.id).state === 'loading' || !p.baseURL.trim()"
+          :title="!p.baseURL.trim() ? '请先填 Base URL' : 'GET /models 列出该端点可用模型（不需要已填模型名）'"
+          @click="listModelsOfRow(p)"
+        >
+          {{ modelsOf(p.id).state === 'loading' ? '探测中…' : '探测模型' }}
+        </button>
         <button class="btn" :data-testid="testidPrefix + '-edit-' + p.id" @click="startEdit(p)">编辑</button>
         <button class="btn" :data-testid="testidPrefix + '-del-' + p.id" @click="delRow(p)">删除</button>
       </span>
@@ -386,6 +505,32 @@ async function probeRow(p: TtsProvider): Promise<void> {
         :data-testid="testidPrefix + '-probe-result-' + p.id"
       >
         {{ probeOf(p.id).text }}
+      </span>
+      <span
+        v-if="modelsOf(p.id).text"
+        class="probe"
+        :class="{
+          'probe-ok': modelsOf(p.id).state === 'ok',
+          'probe-err': modelsOf(p.id).state === 'err',
+          'probe-loading': modelsOf(p.id).state === 'loading'
+        }"
+        :data-testid="testidPrefix + '-models-result-' + p.id"
+      >
+        {{ modelsOf(p.id).text }}
+        <!-- 候选模型：点一下直接填入，免得手抄长模型名出错 -->
+        <span v-if="modelsOf(p.id).models.length" class="model-chips" :data-testid="testidPrefix + '-models-list-' + p.id">
+          <button
+            v-for="m in modelsOf(p.id).models"
+            :key="m"
+            class="model-chip"
+            :class="{ 'model-chip-on': p.model === m }"
+            :title="modelsOf(p.id).owners[m] ? `${m} · ${modelsOf(p.id).owners[m]}` : m"
+            :data-testid="testidPrefix + '-model-chip-' + p.id + '-' + m"
+            @click="useModel(p, m)"
+          >
+            {{ m }}
+          </button>
+        </span>
       </span>
     </div>
     <div v-if="!rows.length && !loading" class="hint">{{ emptyHint }}</div>
@@ -428,12 +573,50 @@ async function probeRow(p: TtsProvider): Promise<void> {
       </div>
       <div class="field">
         <label>模型（model）</label>
-        <input
-          v-model="form.model"
-          placeholder="如：auto"
-          spellcheck="false"
-          :data-testid="testidPrefix + '-form-model'"
-        />
+        <div style="display: flex; gap: 8px; align-items: center">
+          <input
+            v-model="form.model"
+            placeholder="如：auto"
+            spellcheck="false"
+            style="flex: 1"
+            :data-testid="testidPrefix + '-form-model'"
+          />
+          <!-- 表单里也能探测：填 model 之前先看这个端点有哪些可选 -->
+          <button
+            v-if="showModels"
+            class="btn"
+            :data-testid="testidPrefix + '-form-models'"
+            :disabled="formModels.state === 'loading' || !form.baseURL.trim()"
+            :title="!form.baseURL.trim() ? '请先填 Base URL' : 'GET /models 列出可用模型'"
+            @click="listModelsForForm"
+          >
+            {{ formModels.state === 'loading' ? '探测中…' : '探测模型' }}
+          </button>
+        </div>
+        <div
+          v-if="formModels.text"
+          class="probe"
+          :class="{
+            'probe-ok': formModels.state === 'ok',
+            'probe-err': formModels.state === 'err',
+            'probe-loading': formModels.state === 'loading'
+          }"
+          :data-testid="testidPrefix + '-form-models-result'"
+        >
+          {{ formModels.text }}
+          <span v-if="formModels.models.length" class="model-chips" :data-testid="testidPrefix + '-form-models-list'">
+            <button
+              v-for="m in formModels.models"
+              :key="m"
+              class="model-chip"
+              :class="{ 'model-chip-on': form.model === m }"
+              :title="formModels.owners[m] ? `${m} · ${formModels.owners[m]}` : m"
+              @click="form.model = m"
+            >
+              {{ m }}
+            </button>
+          </span>
+        </div>
       </div>
       <div v-if="showVoice" class="field">
         <label>音色（voice）</label>
@@ -544,6 +727,40 @@ async function probeRow(p: TtsProvider): Promise<void> {
 }
 .probe-loading {
   color: var(--muted);
+}
+
+/* 候选模型芯片：一行放不下就换行，不撑破行网格 */
+.model-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.model-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) ease,
+    background var(--dur-fast) ease;
+}
+
+.model-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.model-chip-on {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-weight: 700;
 }
 
 .p-form {

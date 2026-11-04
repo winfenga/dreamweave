@@ -152,6 +152,81 @@ export async function speak(text: string, opts?: { voice?: string }): Promise<Sp
 }
 
 /**
+ * 配音端点探活：真正打一次 `/audio/speech`（**不是** `/chat/completions`）。
+ *
+ * 【为什么必须单独实现】配音端点支持 `/audio/speech` 不代表支持 `/chat/completions`，
+ * 反之亦然。早先配音配置共用 LLM 的探活（`singleChat` → POST /chat/completions），
+ * 对一个纯 TTS 端点必然 404 —— 看起来像「配置错了」，其实配置完全正确。
+ * 所以配音要用它自己的协议来验。
+ *
+ * 判定口径：**HTTP 200 且 content-type 是 audio/*** 才算可用；
+ * 200 但返回 JSON（常见于「模型名不对」的报错包装）判失败，并把上游原文带回。
+ *
+ * 与 `speak()` 的差别：探活**不写缓存**（避免一句无意义的探活文本污染缓存目录）。
+ */
+export async function probeTts(provider: TtsProvider): Promise<{ ok: boolean; httpStatus?: number; ms?: number; error?: string }> {
+  const check = validateBaseURL(provider.baseURL)
+  if (!check.ok) return { ok: false, error: `探活失败：Base URL 不合法（${check.reason}）` }
+  if (!provider.model.trim()) return { ok: false, error: '探活失败：未填写 model' }
+  const voice = (provider.voice ?? '').trim() || 'alloy'
+  const endpoint = provider.baseURL.trim().replace(/\/+$/, '') + '/audio/speech'
+  const started = Date.now()
+  let res: Response
+  try {
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${provider.apiKey.trim()}`
+      },
+      // 探活文本取最短的「能出声」内容：太短有些端点会拒，太长浪费时间
+      body: JSON.stringify({ model: provider.model.trim(), input: '你好', voice, response_format: 'mp3' }),
+      signal: AbortSignal.timeout(60_000)
+    })
+  } catch (e) {
+    const err = e as Error
+    const timedOut = err.name === 'TimeoutError' || /timeout|abort/i.test(err.message)
+    return {
+      ok: false,
+      ms: Date.now() - started,
+      error: `探活失败：${timedOut ? '请求超时（60s）' : err.message}`
+    }
+  }
+  const ms = Date.now() - started
+  const ct = (res.headers.get('content-type') ?? '').toLowerCase()
+  if (!res.ok) {
+    let detail = ''
+    try {
+      detail = (await res.text()).slice(0, 300)
+    } catch {
+      /* 忽略 */
+    }
+    return {
+      ok: false,
+      httpStatus: res.status,
+      ms,
+      error: `探活失败：上游返回 ${res.status}${detail ? `：${detail}` : ''}`
+    }
+  }
+  if (!ct.startsWith('audio/')) {
+    // 200 但不是音频：读出正文（多半是「model not found」这类 JSON 报错），原文带回便于定位
+    let detail = ''
+    try {
+      detail = (await res.text()).slice(0, 300)
+    } catch {
+      /* 忽略 */
+    }
+    return {
+      ok: false,
+      httpStatus: res.status,
+      ms,
+      error: `探活失败：端点返回 ${ct || '未知类型'} 而不是音频${detail ? `，原文：${detail}` : ''}（模型名或音色可能不被支持）`
+    }
+  }
+  return { ok: true, httpStatus: res.status, ms }
+}
+
+/**
  * 合成一段文本并**直接返回音频字节**（漫画配音写回用）。
  *
  * 与上方 `speak()` 的差别：`speak()` 是给渲染进程播放用的，只回 `cache://` URL；

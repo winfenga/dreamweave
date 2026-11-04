@@ -3,8 +3,9 @@
  * 设置面板（批2）：
  * - **模型接入** 与 **配音接入** 均改为通用 `ProviderListEditor`（增删改/选「当前使用」/逐行探活/失败切换顺序）：
  *   两份配置共用同一套 UI 逻辑，以后改 UI 只改一处。
- * - LLM：唯一真源 `llm[] + activeLlmId + fallbackChain`；每行「检测连接」（异步、加载禁点、按行独立）。
- * - TTS：唯一真源 `tts[] + activeTtsId`；含音色；**不做**「检测连接」（本机聚合服务不支持 /audio/speech）。
+ * - LLM：唯一真源 `llm[] + activeLlmId + fallbackChain`；每行「检测连接」（异步、加载禁点、按行独立）
+ *   + 「探测模型」（GET /models 列出可用模型，点芯片直接填入）。
+ * - TTS：唯一真源 `tts[] + activeTtsId`；含音色；「检测连接」走 `/audio/speech`（不是对话接口）。
  * - 「试听」按钮保留，走当前「配音接入」选中的配置（`speak()` 取 `activeProvider('tts')`）。
  * - 音频 / 演出参数保持原样，仍经 `settings:save` 落盘。
  * - 旧单组字段 `ttsVoice` 不再由本面板编辑（仅主进程侧幂等迁移为一条 legacy 配音），避免历史数据丢失。
@@ -65,12 +66,19 @@ const comfyRewriteTarget = ref<'qwen-image-2.1' | 'moss-image' | 'generic'>('qwe
 const comfyWorkflow = ref('')
 const comfyProbeState = ref('')
 const comfyProbing = ref(false)
+/** ComfyUI 模型探测结果（ckpt_name 候选；点选填入，免得手抄 checkpoint 文件名） */
+const comfyModels = ref<string[]>([])
+const comfyModelsState = ref('')
+const comfyModelsLoading = ref(false)
 
 const LLM_HINT =
   '「当前使用」的那组会被解析链路与「✨AI 推荐特效」使用；失败时按「失败切换顺序」依次换用。' +
-  '点某行「检测连接」可验证该组是否可用（最坏约 2 分钟）。Base URL 不要包含 /chat/completions（调用时自动追加）。'
+  '两个按钮分工不同：「探测模型」只读模型目录（GET /models，不需要填模型名，先看有哪些可选）；' +
+  '「检测连接」用已填的模型真发一次请求（验证现在能不能跑，最坏约 2 分钟）。' +
+  'Base URL 不要包含 /chat/completions（调用时自动追加）。'
 const TTS_HINT =
   '配音（兜底音源）：仅当「自动播放音源」选 TTS、或你主动点「试听」时，才会调用当前「配音接入」选中的那组。' +
+  '「检测连接」走的是配音自己的 /audio/speech 接口（不是对话接口），返回音频才算通过。' +
   '结果按 sha256(文本+音色+模型) 缓存到本地，重复台词不重复合成。'
 
 onMounted(() => void loadAll())
@@ -119,8 +127,32 @@ async function probeComfy(): Promise<void> {
   }
 }
 
-/** 校验工作流 JSON：JSON 合法 + 必须含 {{prompt}} 占位（可读错误，不允许保存）。 */
-function validateComfyWorkflow(): string {
+/**
+ * 探测 ComfyUI 已安装的出图模型。
+ *
+ * 与「检测连接」是两件事：那个验服务在不在，这个回答「能用哪些 checkpoint」。
+ * checkpoint 文件名通常很长且带版本/精度，手抄极易出错，所以列出来让用户点选。
+ */
+async function probeComfyModels(): Promise<void> {
+  comfyModelsLoading.value = true
+  comfyModelsState.value = '探测中…'
+  comfyModels.value = []
+  try {
+    const res = await window.feather.imagegenModels()
+    if (res.ok && res.models?.length) {
+      comfyModels.value = res.models
+      comfyModelsState.value = `✅ 发现 ${res.models.length} 个模型`
+    } else {
+      comfyModelsState.value = `❌ ${res.error ?? '未发现任何模型'}`
+    }
+  } catch (e) {
+    comfyModelsState.value = `❌ ${(e as Error).message}`
+  } finally {
+    comfyModelsLoading.value = false
+  }
+}
+
+/** 校验工作流 JSON：JSON 合法 + 必须含 {{prompt}} 占位（可读错误，不允许保存）。 */function validateComfyWorkflow(): string {
   let parsed: unknown
   try {
     parsed = JSON.parse(comfyWorkflow.value)
@@ -229,6 +261,7 @@ async function save(): Promise<void> {
       :hint="LLM_HINT"
       add-label="+ 新增配置"
       :show-probe="true"
+      :show-models="true"
       :show-provider-kind="true"
       :show-chain="true"
     />
@@ -239,7 +272,8 @@ async function save(): Promise<void> {
       heading="配音接入（多组配置）"
       :hint="TTS_HINT"
       add-label="+ 新增配音配置"
-      empty-hint="（还没有配音配置；本机聚合服务通常不支持 /audio/speech，如需可自行添加其它端点）"
+      empty-hint="（还没有配音配置；填好地址后可用「检测连接」验证，它走的是 /audio/speech 而不是对话接口）"
+      :show-probe="true"
       :show-voice="true"
     />
 
@@ -319,7 +353,31 @@ async function save(): Promise<void> {
     </div>
     <div class="field">
       <label>出图模型名（ckpt_name）</label>
-      <input v-model="comfyModel" placeholder="留空 = 用工作流 JSON 里写死的模型" spellcheck="false" data-testid="comfy-model" />
+      <div style="display: flex; gap: 8px; align-items: center">
+        <input
+          v-model="comfyModel"
+          placeholder="留空 = 用工作流 JSON 里写死的模型"
+          spellcheck="false"
+          style="flex: 1"
+          data-testid="comfy-model"
+        />
+        <button class="btn" data-testid="comfy-models" :disabled="comfyModelsLoading" @click="probeComfyModels">
+          {{ comfyModelsLoading ? '探测中…' : '探测模型' }}
+        </button>
+      </div>
+      <div v-if="comfyModelsState" class="hint" data-testid="comfy-models-state">{{ comfyModelsState }}</div>
+      <div v-if="comfyModels.length" class="comfy-model-chips" data-testid="comfy-models-list">
+        <button
+          v-for="m in comfyModels"
+          :key="m"
+          class="model-chip"
+          :class="{ 'model-chip-on': comfyModel === m }"
+          :data-testid="'comfy-model-chip-' + m"
+          @click="comfyModel = m"
+        >
+          {{ m }}
+        </button>
+      </div>
       <div class="hint">非空时替换工作流里的 <span v-pre>{{model}}</span> 占位；工作流没写该占位则不改模型名。</div>
     </div>
     <div class="field" style="display: flex; gap: 12px; flex-wrap: wrap">
@@ -459,5 +517,39 @@ async function save(): Promise<void> {
   background: var(--panel-2);
   padding: 2px;
   cursor: pointer;
+}
+
+/* ckpt_name 候选芯片：一行放不下就换行，与模型接入那边观感一致 */
+.comfy-model-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0;
+}
+
+.model-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) ease,
+    background var(--dur-fast) ease;
+}
+
+.model-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.model-chip-on {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-weight: 700;
 }
 </style>

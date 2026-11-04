@@ -13,7 +13,7 @@ import type {
   SceneTarget
 } from '../../shared/imagegen-types'
 import type { ImagegenTargets } from './data'
-import { probeComfyui, generateViaComfyui } from './comfyui'
+import { probeComfyui, generateViaComfyui, listComfyuiModels } from './comfyui'
 import { applyWorkflow } from './workflow'
 import { DEFAULT_SCENE_NEGATIVE_PROMPT } from '../../shared/imagegen-defaults'
 import { renderCharPrompt, renderIconPrompt, renderScenePrompt } from './prompts'
@@ -34,6 +34,20 @@ import { commitCharImage, commitLocationIcon, commitSceneImage } from './backfil
 /** 探活（settings.comfyui.baseUrl）。 */
 export async function probeImagegen(comfy: ComfyuiSettings): Promise<ImagegenProbeResult> {
   return probeComfyui(comfy.baseUrl)
+}
+
+/**
+ * 列出 ComfyUI 已安装的出图模型（`ckpt_name` 候选）。
+ *
+ * 与探活分开：「检测连接」验证服务在不在，「探测模型」回答「能用哪些模型」。
+ * 后者让用户点选而不是手抄 checkpoint 文件名（抄错就是「模型不存在」）。
+ */
+export async function listImagegenModels(comfy: ComfyuiSettings): Promise<{
+  ok: boolean
+  models?: string[]
+  error?: string
+}> {
+  return listComfyuiModels(comfy.baseUrl)
 }
 
 /**

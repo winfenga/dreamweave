@@ -6,7 +6,7 @@
  */
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { INDEX_FILE, INDEX_VERSION, WORKSPACE_FORMAT } from './paths'
+import { INDEX_FILE, INDEX_VERSION, WORKSPACE_FORMAT, isAcceptedWorkspaceFormat } from './paths'
 import type { WorkspaceIndex } from './types'
 
 /** 结构校验：任意不符即抛可读错误（告警不阻断仅用于资产，不用于 index 骨架）。 */
@@ -18,7 +18,9 @@ function validateIndex(raw: unknown, source: string): WorkspaceIndex {
   if (o.indexVersion !== INDEX_VERSION) {
     throw new Error(`工作库索引版本不符（期望 ${INDEX_VERSION}，实际 ${String(o.indexVersion)}）：${source}`)
   }
-  if (o.format !== WORKSPACE_FORMAT) {
+  // format 双值兼容：新值 + 历史 txt2world-workspace 都放行（见 paths.ts 说明）。
+  // 只在**写入**时统一升级成新值，读侧绝不因为一个历史字符串把整本库判死。
+  if (!isAcceptedWorkspaceFormat(o.format)) {
     throw new Error(`工作库索引 format 不符（期望 "${WORKSPACE_FORMAT}"，实际 "${String(o.format)}"）：${source}`)
   }
   if (typeof o.pkgId !== 'string' || o.pkgId.length === 0) {

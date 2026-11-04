@@ -98,14 +98,8 @@ await sleep(2600)
 runtimeErrors.length = 0
 await send('Page.bringToFront')
 
-await ev(`(async () => {
-  const rows = [...document.querySelectorAll('tbody tr')]
-  const row = rows.find(r => r.textContent.includes(${JSON.stringify(imported?.title ?? '')}))
-  if (!row) return { ok: false }
-  const btn = [...row.querySelectorAll('button')].find(b => b.textContent.trim() === '打开')
-  if (btn) btn.click()
-  return { ok: true }
-})()`)
+await ev(`window.__pkg = ${JSON.stringify(PKG)}; true`)
+await ev("(async () => {\nconst ws = await window.feather.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.feather.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
 await sleep(1500)
 
 await ev(`(() => {

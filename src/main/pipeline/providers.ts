@@ -10,9 +10,17 @@
  *
  * fallback 边界：**同配置退避耗尽 / 不可重试态** 才由调用方走 `nextAfter()` 换配置。
  */
-import type { LlmProvider, ProviderKind, ProviderSettings, TtsProvider, ProbeResult } from '../../shared/pipeline-types'
+import type {
+  LlmProvider,
+  ModelListResult,
+  ProviderKind,
+  ProviderSettings,
+  TtsProvider,
+  ProbeResult
+} from '../../shared/pipeline-types'
 import { loadSettings, saveSettings, validateBaseURL } from '../settings/store'
 import { singleChat } from './llm-client'
+import { probeTts } from '../tts'
 
 /**
  * 探活超时。取 60s：该聚合服务延迟波动大（实测同一模型 1~37s），
@@ -88,6 +96,12 @@ export async function probeProvider(id: string): Promise<ProbeResult> {
   const s = await loadSettings()
   const p = s.llm.find((x) => x.id === id) ?? s.tts.find((x) => x.id === id)
   if (!p) return { ok: false, error: `探活失败：未找到配置 ${id}` }
+  // 配音配置要用**它自己的协议**验（POST /audio/speech），不能拿 LLM 的
+  // /chat/completions 去探 —— 纯 TTS 端点那个路径必然 404，会把好配置判成坏的。
+  if (s.tts.some((x) => x.id === id)) {
+    const r = await probeTts(p as TtsProvider)
+    return { ok: r.ok, httpStatus: r.httpStatus, ms: r.ms, error: r.error }
+  }
   const check = validateBaseURL(p.baseURL)
   if (!check.ok) return { ok: false, error: `探活失败：Base URL 不合法（${check.reason}）` }
   if (!p.model.trim()) return { ok: false, error: '探活失败：未填写 model' }
@@ -122,8 +136,139 @@ export async function probeProvider(id: string): Promise<ProbeResult> {
   }
 }
 
-/** 覆盖式保存多配置（增删改 + 选 active + fallback 链）。 */
-export async function saveProviders(next: Partial<ProviderSettings>): Promise<{ ok: boolean; error?: string }> {
+/**
+ * 模型探测：`GET {baseURL}/models`，列出该端点可用模型。
+ *
+ * **与 `probeProvider` 的区别**（两个都要，不能只留一个）：
+ *   - `probeProvider` 需要已经填好 model，发的是对话请求 —— 回答「这组现在能跑吗」；
+ *   - `listModels` 不需要 model，只读模型目录 —— 回答「这组有哪些模型可选」。
+ * 填模型之前没法探活，但那一刻最需要的恰恰是看到模型名，所以本函数独立存在。
+ *
+ * 兼容性处理（实测环境里三种端点都存在）：
+ *   1. 标准 `{object:'list', data:[{id, owned_by}]}`；
+ *   2. 裸数组 `[{id}]`；
+ *   3. Ollama 风格 `{models:[{name}]}`（部分本地网关会回这个）。
+ *
+ * SSE 不需要特判：`/models` 是普通 GET，实测不会被网关改成流式。
+ * 超时取 20s —— 模型列表比对话请求轻得多，但要容忍首次 DNS/握手慢。
+ */
+export async function listModels(providerId: string): Promise<ModelListResult> {
+  const s = await loadSettings()
+  const p = s.llm.find((x) => x.id === providerId) ?? s.tts.find((x) => x.id === providerId)
+  if (!p) return { ok: false, error: `探测失败：未找到配置 ${providerId}` }
+  return listModelsOf(p.baseURL, p.apiKey)
+}
+
+/** 探测任意 baseURL 的模型列表（不依赖已保存的配置；界面里「未保存也能试」用这个）。 */
+export async function listModelsOf(baseURL: string, apiKey: string): Promise<ModelListResult> {
+  const check = validateBaseURL(baseURL)
+  if (!check.ok) return { ok: false, error: `探测失败：Base URL 不合法（${check.reason}）` }
+  const base = baseURL.trim().replace(/\/+$/, '')
+  const endpoint = `${base}/models`
+  const started = Date.now()
+  let res: Response
+  try {
+    res = await fetch(endpoint, {
+      method: 'GET',
+      headers: apiKey.trim() ? { authorization: `Bearer ${apiKey.trim()}` } : {},
+      signal: AbortSignal.timeout(20_000)
+    })
+  } catch (e) {
+    const err = e as Error
+    const timedOut = err.name === 'TimeoutError' || /timeout|abort/i.test(err.message)
+    return {
+      ok: false,
+      baseURL: base,
+      error: `探测失败：${timedOut ? '请求超时（20s）' : err.message}`
+    }
+  }
+  const ms = Date.now() - started
+  let text = ''
+  try {
+    text = await res.text()
+  } catch {
+    text = ''
+  }
+  if (!res.ok) {
+    const detail = text.slice(0, 300)
+    return {
+      ok: false,
+      httpStatus: res.status,
+      ms,
+      baseURL: base,
+      error: `探测失败：上游返回 ${res.status}${detail ? `：${detail}` : ''}`
+    }
+  }
+  let parsed: unknown = null
+  try {
+    parsed = text ? JSON.parse(text) : null
+  } catch {
+    parsed = null
+  }
+  if (parsed === null) {
+    return {
+      ok: false,
+      httpStatus: res.status,
+      ms,
+      baseURL: base,
+      error: '探测失败：端点可达但返回的不是 JSON（可能不支持 /models）'
+    }
+  }
+
+  // 三种形状统一抽成 [{id, owner}]
+  const rows: { id: string; owner: string }[] = []
+  const pushRow = (id: unknown, owner: unknown): void => {
+    const s = typeof id === 'string' ? id.trim() : ''
+    if (s) rows.push({ id: s, owner: typeof owner === 'string' ? owner.trim() : '' })
+  }
+  if (Array.isArray(parsed)) {
+    for (const it of parsed) {
+      const o = it as Record<string, unknown>
+      pushRow(o?.id ?? o?.name ?? o?.model, o?.owned_by ?? o?.owner)
+    }
+  } else if (parsed && typeof parsed === 'object') {
+    const o = parsed as Record<string, unknown>
+    if (Array.isArray(o.data)) {
+      for (const it of o.data) {
+        const e = it as Record<string, unknown>
+        pushRow(e?.id ?? e?.name ?? e?.model, e?.owned_by ?? e?.owner)
+      }
+    } else if (Array.isArray(o.models)) {
+      for (const it of o.models) {
+        const e = it as Record<string, unknown>
+        pushRow(e?.id ?? e?.name ?? e?.model, e?.owned_by ?? e?.owner)
+      }
+    }
+  }
+
+  if (!rows.length) {
+    return {
+      ok: false,
+      httpStatus: res.status,
+      ms,
+      baseURL: base,
+      error: '探测失败：/models 返回了空列表（Key 可能无权读取模型目录，但仍可正常对话）'
+    }
+  }
+
+  // 去重 + 按 id 排序（端点返回顺序不稳定，排序后便于扫读）
+  const seen = new Set<string>()
+  const uniq = rows.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)))
+  uniq.sort((a, b) => a.id.localeCompare(b.id))
+  const owners: Record<string, string> = {}
+  for (const r of uniq) if (r.owner) owners[r.id] = r.owner
+
+  return {
+    ok: true,
+    httpStatus: res.status,
+    ms,
+    baseURL: base,
+    models: uniq.map((r) => r.id),
+    owners
+  }
+}
+
+/** 覆盖式保存多配置（增删改 + 选 active + fallback 链）。 */export async function saveProviders(next: Partial<ProviderSettings>): Promise<{ ok: boolean; error?: string }> {
   if (Array.isArray(next.llm)) {
     for (const p of next.llm) {
       if (p.baseURL && !validateBaseURL(p.baseURL).ok) {

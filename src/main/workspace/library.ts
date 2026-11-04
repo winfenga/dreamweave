@@ -5,12 +5,12 @@
  * 这样本模块可被 node 验证脚本直接打包执行（与 workspace/index.ts 其余模块一致）。
  */
 import { randomBytes } from 'node:crypto'
-import { lstat, readdir, rm, stat } from 'node:fs/promises'
+import { lstat, readdir, readFile, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { WorkspaceListItem } from '../../shared/workspace-types'
 import type { ChapterInfo, ReadingSegment } from '../../shared/app-types'
 import { readIndex } from './index-store'
-import { sanitizeSegment } from './paths'
+import { sanitizeSegment, WORKSPACE_FORMAT, WORKSPACE_FORMAT_LEGACY } from './paths'
 
 /** 原文字面片段（包内 entryPath 形如 `<pkgId>/source/body.utf8.txt`） */
 const SOURCE_ENTRY_SUFFIX = '/source/body.utf8.txt'
@@ -205,6 +205,75 @@ export async function removeWorkspaceDir(dir: string): Promise<{ ok: boolean; er
   if (guard) return { ok: false, error: guard }
   await rm(dir, { recursive: true, force: false })
   return { ok: true }
+}
+
+/**
+ * 工作库 format 体检结果（诊断用，不修改任何文件）。
+ *
+ * 存在的理由：`index-store` 的 format 校验**读时兼容**新旧两个值，
+ * 而「兼容生效了吗」这件事没法从"书库列出来了"推断 —— 万一那些库其实早被迁移过，
+ * 兼容分支就从未被走到。这个体检直接读每本库 index.json 里的原始 format 串并计数，
+ * 让「历史值仍在磁盘上、且全部被接受」成为**可验证的事实**而不是假设。
+ */
+export interface WorkspaceFormatReport {
+  /** 新 format 串（dreamweave-workspace）的本数 */
+  next: number
+  /** 历史 format 串（txt2world-workspace）的本数 */
+  legacy: number
+  /** 因 format 不符被拒的本数（应为 0 —— 否则说明兼容没覆盖到） */
+  rejected: number
+  /** 被拒样本（最多 5 个，便于定位） */
+  rejectedSamples: string[]
+  /** 其它读取失败（索引损坏/半成品），与 format 无关，单独计数避免混淆 */
+  unreadable: number
+  total: number
+}
+
+/** 逐本读取 index.json 的原始 format 字段并归类（只读，不写盘）。 */
+export async function inspectWorkspaceFormats(wsRoot: string): Promise<WorkspaceFormatReport> {
+  const report: WorkspaceFormatReport = {
+    next: 0,
+    legacy: 0,
+    rejected: 0,
+    rejectedSamples: [],
+    unreadable: 0,
+    total: 0
+  }
+  let names: string[]
+  try {
+    const entries = await readdir(wsRoot, { withFileTypes: true })
+    names = entries.filter((e) => e.isDirectory()).map((e) => e.name)
+  } catch {
+    return report
+  }
+  for (const name of names) {
+    report.total++
+    let raw: string
+    try {
+      raw = await readFile(join(wsRoot, name, 'index.json'), 'utf8')
+    } catch {
+      report.unreadable++
+      continue
+    }
+    let fmt: unknown
+    try {
+      fmt = (JSON.parse(raw) as Record<string, unknown>).format
+    } catch {
+      report.unreadable++
+      continue
+    }
+    if (fmt === WORKSPACE_FORMAT) {
+      report.next++
+    } else if (fmt === WORKSPACE_FORMAT_LEGACY) {
+      report.legacy++
+    } else {
+      report.rejected++
+      if (report.rejectedSamples.length < 5) {
+        report.rejectedSamples.push(`${name}: ${String(fmt)}`)
+      }
+    }
+  }
+  return report
 }
 
 /** 切段结果 */

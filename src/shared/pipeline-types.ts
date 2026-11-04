@@ -116,6 +116,29 @@ export interface ProbeResult {
   error?: string
 }
 
+/**
+ * 模型探测结果：问端点「你有哪些模型」。
+ *
+ * 与 `ProbeResult`（探活）是**两件事**，用途也不同：
+ *   - 探活：用**已填的 model** 发一次最小对话请求，验证「这组配置现在能不能真的跑」；
+ *   - 探测：单独 `GET /models`，验证「这个端点的 Key 对不对、有哪些模型可选」。
+ *
+ * 分开的理由：填模型之前没法探活（没 model 必然失败），但那时**恰恰最需要**知道
+ * 端点上有哪些模型名可用 —— 否则用户只能靠猜或去别处查文档。
+ */
+export interface ModelListResult {
+  ok: boolean
+  /** 探测到的模型 id 列表（按 id 排序；端点返回顺序不稳定，排序后便于扫读） */
+  models?: string[]
+  /** owned_by 归属（模型 id → 归属），部分端点不返回 */
+  owners?: Record<string, string>
+  httpStatus?: number
+  ms?: number
+  error?: string
+  /** 端点的 baseURL（便于确认探测的是哪一组） */
+  baseURL?: string
+}
+
 // ---------------------------------------------------------------------------
 // 消息 / 用量
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import type {
 import type { MangaViewResult } from '../../shared/manga-types'
 import type { ExportT2wResult, WorkspaceListResult } from '../../shared/workspace-types'
 import type {
+  ModelListResult,
   ParseStatus,
   ProbeResult,
   ProviderSettings,
@@ -28,6 +29,7 @@ import {
   buildReadingSegments,
   isSourceEntry,
   listWorkspaces,
+  inspectWorkspaceFormats,
   resolveWorkspaceDir
 } from '../workspace/library'
 import { assembleManifest } from '../workspace/manifest-assembler'
@@ -54,7 +56,7 @@ import {
   parseStatus as pipelineParseStatus,
   start as pipelineStart
 } from '../pipeline/orchestrator'
-import { activeProvider, probeProvider, saveProviders } from '../pipeline/providers'
+import { activeProvider, listModels, listModelsOf, probeProvider, saveProviders } from '../pipeline/providers'
 import { buildTasksOverview } from '../pipeline/overview'
 import type {
   EffectCatalogResult,
@@ -69,7 +71,7 @@ import type {
   ImagegenProbeResult,
   ImagegenTargetsResult
 } from '../../shared/imagegen-types'
-import { imagegenGenerate, imagegenTargets, probeImagegen } from '../imagegen'
+import { imagegenGenerate, imagegenTargets, listImagegenModels, probeImagegen } from '../imagegen'
 import {
   defaultExportDirName,
   exportCards,
@@ -175,6 +177,14 @@ export const IPC = {
   opsSaveProviders: 'ops:saveProviders',
   /** 多配置：探活指定配置 */
   opsProbeProvider: 'ops:probeProvider',
+  /**
+   * 多配置：**探测端点有哪些模型**（GET /models）。
+   *
+   * 与 `opsProbeProvider` 分工不同：探活验证「这组现在能跑吗」（需已填 model），
+   * 探测回答「这个端点有哪些模型可选」（不需要 model）。填模型之前只能靠探测。
+   * 入参可给已保存的 `id`，也可直接给表单里**还没保存**的 baseURL/apiKey。
+   */
+  opsListModels: 'ops:listModels',
   /** 书库：列出 <userData>/workspace 下所有工作库（损坏项跳过并单列） */
   workspaceList: 'workspace:list',
   /** 书库：按**目录名**打开已有工作库（复用索引，不再解包）→ 装配 manifest → 摘要 */
@@ -183,12 +193,23 @@ export const IPC = {
   workspaceDelete: 'workspace:delete',
   /** 书库：在系统文件管理器中打开工作库文件夹（只读打开，不写盘） */
   workspaceReveal: 'workspace:reveal',
+  /**
+   * 书库：**format 体检**（只读诊断）。
+   *
+   * 工作库索引的 format 采用「读时兼容新旧两值、写时升级为新值」。
+   * 这个接口直接统计磁盘上每本库的原始 format 串，用来证明：
+   * 历史值确实还在盘上、且**全部被接受**（没有被 format 校验挡掉的库）。
+   * 不改任何文件，也不做迁移。
+   */
+  workspaceFormats: 'workspace:formats',
   /** 书库：一键导出 —— 把工作库反向打包成 .t2w（C2；outPath 缺省时弹保存框） */
   workspaceExportT2w: 'workspace:exportT2w',
   /** 阅读原文：按章切段返回当前工作库的全书原文 */
   sourceRead: 'source:read',
   /** 生图：探活 ComfyUI（GET /system_stats） */
   imagegenProbe: 'imagegen:probe',
+  /** 生图：**列已安装的出图模型**（ckpt_name 候选，GET /object_info/CheckpointLoaderSimple） */
+  imagegenModels: 'imagegen:models',
   /** 生图：待生成清单（人物形象/场景/地点类型，含缺图标记；纯读） */
   imagegenTargets: 'imagegen:targets',
   /** 生图：单张生成 + 回填（批量由渲染层逐张串行调用） */
@@ -744,6 +765,26 @@ export function registerIpc(): void {
 
   ipcMain.handle(IPC.opsProbeProvider, async (_event, id: string): Promise<ProbeResult> => probeProvider(id))
 
+  /**
+   * 模型探测：两种入参形态
+   *   - `{ id }`        已保存的配置；
+   *   - `{ baseURL, apiKey }` 表单里还没保存的（填模型之前先看看有哪些可选）。
+   */
+  ipcMain.handle(
+    IPC.opsListModels,
+    async (
+      _event,
+      arg: { id?: string; baseURL?: string; apiKey?: string }
+    ): Promise<ModelListResult> => {
+      try {
+        if (arg?.id) return await listModels(arg.id)
+        return await listModelsOf(arg?.baseURL ?? '', arg?.apiKey ?? '')
+      } catch (e) {
+        return { ok: false, error: `探测失败：${(e as Error).message}` }
+      }
+    }
+  )
+
   // —— 书库管理 ——
   ipcMain.handle(IPC.workspaceList, async (): Promise<WorkspaceListResult> => {
     try {
@@ -834,6 +875,16 @@ export function registerIpc(): void {
     }
   })
 
+  // format 体检（只读诊断）：统计磁盘上每本库的原始 format 串，
+  // 用来证明「历史值仍在盘上 + 全部被接受」这件事是真的，而不是靠迁移蒙混过去。
+  ipcMain.handle(IPC.workspaceFormats, async () => {
+    try {
+      return await inspectWorkspaceFormats(workspaceRoot())
+    } catch (e) {
+      return { error: (e as Error).message }
+    }
+  })
+
   // —— 阅读原文 ——
   ipcMain.handle(IPC.sourceRead, async (): Promise<SourceReadResult> => {    try {
       const session = getWorkspaceSession()
@@ -862,6 +913,16 @@ export function registerIpc(): void {
     try {
       const s = await loadSettings()
       return await probeImagegen(s.comfyui)
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  // 列出 ComfyUI 已安装的出图模型（ckpt_name 候选）—— 让用户点选而不是手抄
+  ipcMain.handle(IPC.imagegenModels, async (): Promise<{ ok: boolean; models?: string[]; error?: string }> => {
+    try {
+      const s = await loadSettings()
+      return await listImagegenModels(s.comfyui)
     } catch (e) {
       return { ok: false, error: (e as Error).message }
     }

@@ -15,7 +15,31 @@
 export const WORKSPACE_DIR_NAME = 'workspace'
 export const INDEX_FILE = 'index.json'
 export const INDEX_VERSION = 1
-export const WORKSPACE_FORMAT = 'txt2world-workspace'
+
+/**
+ * 工作库索引的 format 串。
+ *
+ * **双值兼容**（不是过渡期妥协，而是长期约定）：
+ *   - 写：一律 `'dreamweave-workspace'`（新值，脱钩 txt2world）；
+ *   - 读：新值与历史值 `'txt2world-workspace'` 都认。
+ *
+ * 为什么读侧必须认旧值：早期导入的工作库（本地实测 63 个）索引里写的就是历史串，
+ * 若只认新值，这些书会在`index-store`的校验里**直接抛错、整本打不开**，
+ * 而它们的数据本身完全可用 —— 为一个字符串把用户的库锁死是不可接受的。
+ *
+ * 因此这里不改历史文件、不做批量迁移：**读时兼容，写时升级**。
+ * 任何一本库被重新写入（解析/回填/导出）后，format 自然变成新值。
+ */
+export const WORKSPACE_FORMAT = 'dreamweave-workspace'
+/** 历史 format 串（只读兼容，永不再写） */
+export const WORKSPACE_FORMAT_LEGACY = 'txt2world-workspace'
+/** 读取侧接受的全部 format 值 */
+export const WORKSPACE_FORMATS_ACCEPTED: readonly string[] = [WORKSPACE_FORMAT, WORKSPACE_FORMAT_LEGACY]
+
+/** 某个 format 串是否可接受（读侧校验用） */
+export function isAcceptedWorkspaceFormat(v: unknown): boolean {
+  return typeof v === 'string' && WORKSPACE_FORMATS_ACCEPTED.includes(v)
+}
 
 export const META_DIR = 'meta'
 export const ORIGIN_HEADER_REL = 'meta/origin-header.bin'

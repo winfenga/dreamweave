@@ -111,10 +111,18 @@ export interface TaskState {
   source?: 'runtime'
 }
 
+/**
+ * 工作库索引的 format 串。
+ *
+ * 写：新值 `'dreamweave-workspace'`；读：新值与历史 `'txt2world-workspace'` 都接受
+ * （历史工作库不迁移、不锁死，详见 `main/workspace/paths.ts` 的说明）。
+ */
+export type WorkspaceFormat = 'dreamweave-workspace' | 'txt2world-workspace'
+
 /** 工作库索引（<root>/index.json） */
 export interface WorkspaceIndex {
   indexVersion: 1
-  format: 'txt2world-workspace'
+  format: WorkspaceFormat
   pkgId: string
   title: string
   origin: OriginInfo

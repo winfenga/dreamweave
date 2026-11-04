@@ -10,6 +10,7 @@ import type { MangaViewResult } from '../shared/manga-types'
 import type { WorkspaceListResult } from '../shared/workspace-types'
 import type { ExportT2wResult } from '../shared/workspace-types'
 import type {
+  ModelListResult,
   ParseProgress,
   ParseStatus,
   ProbeResult,
@@ -50,6 +51,7 @@ export type { WorkspaceListItem, WorkspaceListResult } from '../shared/workspace
 /** 一键导出结果（C2）：ok/path/bytes/warnings/canceled/error */
 export type { ExportT2wResult } from '../shared/workspace-types'
 export type { ParseProgress, ParseStatus, ProbeResult, ProviderSettings } from '../shared/pipeline-types'
+export type { ModelListResult } from '../shared/pipeline-types'
 export type { TaskCounts, TaskInstanceState, TaskOverviewItem, TasksOverview } from '../shared/pipeline-types'
 export type { ScriptSaveResult, ScriptSaveTarget } from '../main/script-edit'
 export type {
@@ -184,6 +186,14 @@ const api = {
     ipcRenderer.invoke('ops:saveProviders', next),
   /** 探活指定配置 */
   probeProvider: (id: string): Promise<ProbeResult> => ipcRenderer.invoke('ops:probeProvider', id),
+  /**
+   * 探测端点有哪些模型（GET /models）。
+   *
+   * 传 `{ id }` 探测已保存配置；传 `{ baseURL, apiKey }` 探测表单里还没保存的。
+   * 与 `probeProvider` 分工不同：那个需要已填 model，这个不需要 —— 填模型之前先看有哪些可选。
+   */
+  listModels: (arg: { id?: string; baseURL?: string; apiKey?: string }): Promise<ModelListResult> =>
+    ipcRenderer.invoke('ops:listModels', arg),
 
   // —— 书库管理 ——
   /** 列出 <userData>/workspace 下所有工作库（损坏项单列于 broken[]，不抛错） */
@@ -205,6 +215,21 @@ const api = {
     ipcRenderer.invoke('workspace:exportT2w', dirName, outPath),
   /** 在系统文件管理器中打开工作库文件夹（只读打开，不写盘） */
   revealWorkspace: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('workspace:reveal'),
+  /**
+   * format 体检（只读诊断）：统计磁盘上每本工作库索引里的原始 format 串。
+   *
+   * 用途：工作库格式「读时兼容新旧两值」，此接口用来证明历史值确实还在盘上、
+   * 且全部被接受 —— 不是靠批量迁移蒙混过去的。不改任何文件。
+   */
+  inspectWorkspaceFormats: (): Promise<{
+    next: number
+    legacy: number
+    rejected: number
+    rejectedSamples: string[]
+    unreadable: number
+    total: number
+    error?: string
+  }> => ipcRenderer.invoke('workspace:formats'),
 
   // —— 阅读原文 ——
   /** 读取当前工作库全书原文（按章切段；无会话/无原文/非 UTF-8 → 可读错误） */
@@ -213,6 +238,12 @@ const api = {
   // —— 生图（本地 ComfyUI）——
   /** 探活 ComfyUI（GET /system_stats；连接拒绝/超时 → 可读错误） */
   imagegenProbe: (): Promise<ImagegenProbeResult> => ipcRenderer.invoke('imagegen:probe'),
+  /**
+   * 列出 ComfyUI 已安装的出图模型（ckpt_name 候选）。
+   * 与探活分工不同：探活验服务在不在，这个回答「能用哪些模型」。
+   */
+  imagegenModels: (): Promise<{ ok: boolean; models?: string[]; error?: string }> =>
+    ipcRenderer.invoke('imagegen:models'),
   /**
    * 待生成清单（人物形象/场景/地点类型，含缺图标记；纯读）。
    * @param pkgId 工作库**目录名**；不传则用当前会话的工作库
