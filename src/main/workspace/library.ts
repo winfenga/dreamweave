@@ -97,10 +97,21 @@ export interface WorkspaceListData {
  * - 失败（索引缺失/损坏/半成品）→ 跳过并记入 `broken[]`，**绝不抛崩**；
  * - `wsRoot` 不存在 → 返回空数组。
  *
+ * 【性能：totalBytes 默认不统计】
+ * `totalBytes` 要对每个工作库**递归遍历全部文件**求和。实测 137 本书时，
+ * 这一步串行跑约 **3.5 秒**（占总耗时的 90%），而书库界面**根本不显示它**
+ * （封面显示的是包体积 `t2wSize`，那是 index.json 里的数，不用算）。
+ * 所以默认跳过，由 `opts.withTotalBytes` 显式要求才算 —— 需要它的地方（如诊断/统计）
+ * 自己承担这个代价，不必让每次打开书库都等 3.5 秒。
+ *
  * @param currentRoot 当前会话所在工作库根（可选）。传入时据此给 `current` 打标 ——
  *   **按目录判定**：改造后同一 pkgId 可有多份副本，按 pkgId 判定会误标多行。
  */
-export async function listWorkspaces(wsRoot: string, currentRoot?: string): Promise<WorkspaceListData> {
+export async function listWorkspaces(
+  wsRoot: string,
+  currentRoot?: string,
+  opts?: { withTotalBytes?: boolean }
+): Promise<WorkspaceListData> {
   let names: string[]
   try {
     const entries = await readdir(wsRoot, { withFileTypes: true })
@@ -111,6 +122,7 @@ export async function listWorkspaces(wsRoot: string, currentRoot?: string): Prom
 
   const items: WorkspaceListItem[] = []
   const broken: string[] = []
+  const wantBytes = opts?.withTotalBytes === true
 
   for (const name of names) {
     const root = join(wsRoot, name)
@@ -134,7 +146,8 @@ export async function listWorkspaces(wsRoot: string, currentRoot?: string): Prom
         chapterCount: Number(project?.chapterCount ?? 0) || 0,
         charCount: Number(project?.charCount ?? 0) || 0,
         assetCount: index.assets.length,
-        totalBytes: await dirBytes(root),
+        // 递归求和很贵：只在调用方明确要求时才算，否则给 0（界面不展示这个字段）
+        totalBytes: wantBytes ? await dirBytes(root) : 0,
         broken: false
       })
     } catch {

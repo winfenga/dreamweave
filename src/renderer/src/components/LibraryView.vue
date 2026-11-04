@@ -248,7 +248,7 @@ async function reveal(): Promise<void> {
     <div class="card lib-toolbar">
       <h2>书架</h2>
       <div class="lib-actions">
-        <button class="btn primary" @click="emit('import')">导入 .t2w</button>
+        <button class="btn primary" @click="emit('import')">导入书籍</button>
         <button class="btn" @click="emit('import-txt')">导入 .txt</button>
         <button class="btn" :disabled="loading" @click="refresh">
           {{ loading ? '读取中…' : '刷新' }}
@@ -277,7 +277,7 @@ async function reveal(): Promise<void> {
     <div v-if="!hasAny" class="empty lib-empty">
       <div class="big">📚</div>
       <div>书架是空的</div>
-      <button class="btn primary" @click="emit('import')">点这里导入 .t2w</button>
+      <button class="btn primary" @click="emit('import')">点这里导入书籍</button>
       <button class="btn" @click="emit('import-txt')">点这里导入 .txt</button>
       <div class="hint">导入会新建一本书（不查重、不覆盖），可以反复导入同一个文件</div>
       <div class="hint">纯本地读取，不会上传任何数据</div>

@@ -290,7 +290,7 @@ async function doImport(kind: 't2w' | 'txt' = 't2w'): Promise<void> {
             {{ isFullScreen ? '⤡ 退出全屏' : '⤢ 全屏' }}
           </button>
           <button class="btn primary" :disabled="loading" @click="doImport()">
-            {{ loading ? '导入中…' : '导入 .t2w' }}
+            {{ loading ? '导入中…' : '导入书籍' }}
           </button>
           <button class="btn" :disabled="loading" @click="doImport('txt')">
             {{ loading ? '导入中…' : '导入 .txt' }}

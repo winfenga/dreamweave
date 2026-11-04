@@ -306,7 +306,7 @@ export interface CharacterPortrait {
 
 /**
  * 包内配音片段：reader `:dubbing:clip:<chapterSeq>:<order>`。
- * path 指向包内 mp3 成员，经 t2w:// 常驻访问，**不落盘**。
+ * path 指向包内 mp3 成员，经 dwe:// 常驻访问，**不落盘**。
  */
 export interface DubbingClip {
   /** `${actionType}|${chapterSeq}|${order}` —— 与动作表对齐用的复合键 */

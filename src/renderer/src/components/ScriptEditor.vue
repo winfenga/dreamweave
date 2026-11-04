@@ -241,7 +241,7 @@ async function save(): Promise<void> {
           </div>
           <div v-if="message" class="se-message" :class="messageKind" data-testid="se-message">{{ message }}</div>
           <div class="se-note">
-            写回前会自动备份为 <code>原名.backup-时间戳.t2w</code>；只改这一句的文本，不动其他任何数据。
+            写回前会自动备份为 <code>原名.backup-时间戳</code>（与原文件同目录、原扩展名）；只改这一句的文本，不动其他任何数据。
           </div>
         </template>
         <div v-else class="se-placeholder">← 从左侧选一句话开始编辑</div>

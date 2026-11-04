@@ -173,7 +173,7 @@ function loreToCharacterBook(entries: LorebookEntry[]): Record<string, unknown> 
   }))
   return {
     name: 'DreamWeave 世界书',
-    description: '由 DreamWeave 从 t2w 包自动生成：人物档案、关系与世界观。',
+    description: '由 DreamWeave 从书籍解析结果自动生成：人物档案、关系与世界观。',
     scan_depth: 4,
     token_budget: 1024,
     recursive_scanning: false,

@@ -97,7 +97,7 @@ function makeEffectsMutator(payload: EffectsSavePayload) {
 export async function saveEffectsAction(payload: EffectsSavePayload): Promise<EffectsSaveResult> {
   try {
     const session = getWorkspaceSession()
-    if (!session) return { ok: false, error: '尚未导入任何 .t2w 包' }
+    if (!session) return { ok: false, error: '尚未导入任何书籍' }
 
     // 无单句且无范围 → 无事可做（与旧实现一致：不备份不写盘）
     if (!payload.sentence && payload.ranges === undefined) {

@@ -391,7 +391,7 @@ export function registerIpc(): void {
 
       const win = BrowserWindow.fromWebContents(event.sender) ?? undefined
       const picked = await dialog.showOpenDialog(win as BrowserWindow, {
-        title: kind === 'txt' ? '导入文本文档' : '导入 .t2w 包或文本文档',
+        title: kind === 'txt' ? '导入文本文档' : '导入书籍或文本文档',
         properties: ['openFile'],
         filters:
           kind === 'txt'
@@ -400,7 +400,9 @@ export function registerIpc(): void {
                 { name: '全部文件', extensions: ['*'] }
               ]
             : [
-                { name: 'T2W 包', extensions: ['t2w'] },
+                // 文件对话框里不再出现 t2w 字样；旧 .t2w 包仍可选（放在「全部文件」里，
+                // 且 extensions 仍列出 t2w，保证用户手上的旧包照样能导入）
+                { name: '书籍', extensions: ['dwe', 't2w'] },
                 { name: '文本文档', extensions: ['txt'] },
                 { name: '全部文件', extensions: ['*'] }
               ]
@@ -846,10 +848,12 @@ export function registerIpc(): void {
           }
           const win = BrowserWindow.fromWebContents(event.sender) ?? undefined
           const picked = await dialog.showSaveDialog(win as BrowserWindow, {
-            title: '导出 .t2w 包',
-            defaultPath: `${bookName.replace(/[\\/:*?"<>|]+/g, '_')}.t2w`,
+            title: '导出书籍',
+            // 默认扩展名改用自家的 .dwe（不再暴露 t2w 字样）。
+            // 导入侧对两种扩展名都接受（.dwe 与历史的 .t2w），旧包不会因此打不开。
+            defaultPath: `${bookName.replace(/[\\/:*?"<>|]+/g, '_')}.dwe`,
             filters: [
-              { name: 'T2W 包', extensions: ['t2w'] },
+              { name: '书籍', extensions: ['dwe'] },
               { name: '全部文件', extensions: ['*'] }
             ]
           })

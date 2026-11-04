@@ -50,18 +50,18 @@ ws.addEventListener('message', (e) => {
     /**
      * 精确放行「上一套遗留的图片请求打在旧 assetKey 上」这一类 404。
      *
-     * 为什么这不是代码缺陷：`t2w://<assetKey>/…` 里每个工作库有自己的 assetKey，
+     * 为什么这不是代码缺陷：`dwe://<assetKey>/…` 里每个工作库有自己的 assetKey，
      * 打开新书后 assetKey 会切走，旧书图片的 URL 自然 404（协议层按设计返回 404）。
      * 套件串联运行时，上一套渲染过的 `<img>` 在页面 reload 前会再请求一次，
      * 于是日志里留下一条 404 —— 与本次要验的世界书毫无关系。
      *
      * 但**不能整体屏蔽 404**（那会漏掉真正的资源缺失），所以只放行同时满足：
      *   ① 文本是 "Failed to load resource" 且含 404；
-     *   ② URL 是 t2w:// 协议（包内资产协议，符合上面的"切书后旧 URL 失效"语义）。
+     *   ② URL 是 dwe:// 协议（包内资产协议，符合上面的"切书后旧 URL 失效"语义）。
      * 其它任何 404 照旧算运行期异常。
      */
     const isStaleAsset404 =
-      /Failed to load resource/i.test(text) && /\b404\b/.test(text) && /^t2w:\/\//i.test(url)
+      /Failed to load resource/i.test(text) && /\b404\b/.test(text) && /^dwe:\/\//i.test(url)
     if (isStaleAsset404) return
     runtimeErrors.push(`LOG.error: ${text.slice(0, 200)}${url ? ` @ ${url.slice(0, 160)}` : ''}`)
   }

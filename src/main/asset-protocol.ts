@@ -1,5 +1,5 @@
 /**
- * 包内二进制成员的常驻访问协议：t2w://<assetKey>/<entryPath>
+ * 包内二进制成员的常驻访问协议：dwe://<assetKey>/<entryPath>
  *
  * 设计要点（对应「演出 / 地图需要大图常驻，不要每次切换都重新解码」）：
  * - 图片直接从已读入内存的包 buffer 里按偏移切片返回，**不落盘、不二次解码**；
@@ -14,7 +14,16 @@ import { extname } from 'node:path'
 import { resolveStorePath } from './workspace/assets'
 import { getWorkspaceSession } from './workspace/session'
 
-export const ASSET_SCHEME = 't2w'
+/**
+ * 包内资产的自定义 scheme 名。
+ *
+ * 历史名是 `t2w`（沿袭上游 txt2world），现改为自家的 `dwe`。
+ * 这是**彻底换名**：主进程 `protocol.handle`、渲染层 CSP、以及 URL 拼接全部走同一个常量，
+ * 三处必须一致 —— 少改一处，图片/音频会全 404（协议不匹配比文件缺失更难排查）。
+ *
+ * 只影响**运行期** URL；磁盘数据（index.json 的字段名）不含 scheme 名，历史工作库无需迁移。
+ */
+export const ASSET_SCHEME = 'dwe'
 
 /**
  * scheme 特权声明。

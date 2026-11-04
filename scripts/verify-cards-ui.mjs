@@ -10,7 +10,7 @@
  * 验证内容：
  *   ① 侧栏「角色卡」入口可点开，列表渲染出人物（数量与 canonical 一致）
  *   ② 点选角色后详情加载，档案/关系/立绘/音色/世界书五个页签都有内容
- *   ③ 立绘是真实像素（不是破图），走 t2w:// 协议
+ *   ③ 立绘是真实像素（不是破图），走 dwe:// 协议
  *   ④ 关系条目来自 canonical（双向收集，不只单向）
  *   ⑤ 世界书条目齐备且含常驻世界观条目
  *   ⑥ 导出 JSON 能落地（走真实 IPC + 临时目录）
@@ -217,7 +217,7 @@ for (let i = 0; i < 20; i++) {
 }
 check('立绘已加载', imgOk?.state === 'done', JSON.stringify(imgOk))
 check('立绘有真实像素', (imgOk?.nw ?? 0) > 100 && (imgOk?.nh ?? 0) > 100, `${imgOk?.nw}x${imgOk?.nh}`)
-check('立绘走 t2w:// 协议', (imgOk?.src ?? '').startsWith('t2w://'), imgOk?.src)
+check('立绘走 dwe:// 协议', (imgOk?.src ?? '').startsWith('dwe://'), imgOk?.src)
 
 // ============ ④ 关系双向 ============
 mark('关系双向');

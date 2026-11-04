@@ -31,7 +31,7 @@ export interface CardPortrait {
   visualKeywords: string[]
   /** 包内 entryPath */
   imagePath: string | null
-  /** 常驻 URL（t2w://…） */
+  /** 常驻 URL（dwe://…） */
   imageUrl: string | null
   /** 是否是默认形象（角色卡首图） */
   isDefault: boolean

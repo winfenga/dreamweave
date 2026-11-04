@@ -159,7 +159,7 @@ const audioProbe = await ev(`(async () => {
   try { await a.play(); playOk = true; a.pause() } catch { playOk = false }
   return { ok: true, meta, playOk, urlHead: clip.url.slice(0, 30) }
 })()`)
-check('t2w:// 配音能被 <audio> 解码', audioProbe?.meta?.state === 'metadata', JSON.stringify(audioProbe?.meta))
+check('dwe:// 配音能被 <audio> 解码', audioProbe?.meta?.state === 'metadata', JSON.stringify(audioProbe?.meta))
 check('音频时长合理（>0.5s）', (audioProbe?.meta?.duration ?? 0) > 0.5, `${audioProbe?.meta?.duration}s`)
 check('音频首段时长 ≈ 5.0s（与截图一致）', Math.abs((audioProbe?.meta?.duration ?? 0) - 5.0) < 1.5, `${audioProbe?.meta?.duration}s`)
 check('可以直接 play()（CSP 未拦截 t2w:）', audioProbe?.playOk === true, '')
@@ -247,7 +247,7 @@ const manual = await ev(`(async () => {
   }
 })()`)
 check('手动推进台词时调用了配音播放', (manual?.voiceCalls ?? 0) > 0, `配音元素被调 play() ${manual?.voiceCalls ?? 0} 次`)
-check('播放的是 t2w:// 包内音频', (manual?.srcs ?? []).every((s) => s.startsWith('t2w://')), JSON.stringify((manual?.srcs ?? []).map((s) => s.slice(0, 18))))
+check('播放的是 dwe:// 包内音频', (manual?.srcs ?? []).every((s) => s.startsWith('dwe://')), JSON.stringify((manual?.srcs ?? []).map((s) => s.slice(0, 18))))
 
 // ============ ④ 自动播放按配音时长推进（核心）============
 mark('自动播放节奏')
@@ -366,7 +366,7 @@ const noVoiceFallback = await ev(`(async () => {
     el.onended = () => finish('ended')
     el.onloadedmetadata = () => finish('metadata')
     setTimeout(() => finish('timeout'), 6000)
-    el.src = 't2w://deadbeef/does/not/exist.mp3'
+    el.src = 'dwe://deadbeef/does/not/exist.mp3'
     el.load()
   })
   return { ok: true, settled, ms: Date.now() - started }

@@ -87,7 +87,7 @@ export async function saveScriptAction(
 ): Promise<ScriptSaveResult> {
   try {
     const session = getWorkspaceSession()
-    if (!session) return { ok: false, error: '尚未导入任何 .t2w 包' }
+    if (!session) return { ok: false, error: '尚未导入任何书籍' }
 
     const r = await writeStoryScriptShards(session.root, session.index.origin.t2wPath, () =>
       makeTextMutator(target, newText)

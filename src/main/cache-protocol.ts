@@ -18,7 +18,7 @@ import { audioMimeOf, preflightResponse, rangeResponse } from './asset-protocol'
 export const CACHE_SCHEME = 'cache'
 
 /**
- * scheme 特权声明（与 t2w:// 同批注册，见 asset-protocol.ts 的说明）。
+ * scheme 特权声明（与 dwe:// 同批注册，见 asset-protocol.ts 的说明）。
  */
 export const CACHE_PRIVILEGE = {
   scheme: CACHE_SCHEME,

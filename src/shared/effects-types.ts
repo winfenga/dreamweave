@@ -274,7 +274,7 @@ export interface ActorSource {
 export interface ActorPortrait {
   /** 角色 id（用于生成 data-* 与去重键） */
   characterId: string
-  /** 立绘图片 URL（t2w:// 常驻地址） */
+  /** 立绘图片 URL（dwe:// 常驻地址） */
   imageUrl: string
   /**
    * 立绘的不透明内容边界（相对图片高度的比例 0..1）。

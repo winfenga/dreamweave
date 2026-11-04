@@ -163,7 +163,7 @@ for (let i = 0; i < 24; i++) {
 }
 check('页面图已加载', imgOk?.state === 'done', JSON.stringify(imgOk))
 check('页面图有真实像素', (imgOk?.nw ?? 0) > 100 && (imgOk?.nh ?? 0) > 100, `${imgOk?.nw}x${imgOk?.nh}`)
-check('页面图走 t2w:// 协议', (imgOk?.src ?? '').startsWith('t2w://'), imgOk?.src)
+check('页面图走 dwe:// 协议', (imgOk?.src ?? '').startsWith('dwe://'), imgOk?.src)
 
 // ============ ④ 热区 ============
 const frames = await ev(`(() => {
