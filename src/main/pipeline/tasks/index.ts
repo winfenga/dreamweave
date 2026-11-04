@@ -68,6 +68,10 @@ import { draftAdapter } from './draft'
 import { draftCharacterAdapter } from './draftCharacter'
 import { draftOtherAdapter } from './draftOther'
 import { mergeReviewAdapter } from './mergeReview'
+import { mangaScriptAdapter } from './mangaScript'
+import { mangaEffectsAdapter } from './mangaEffects'
+import { mangaMusicAdapter } from './mangaMusic'
+import { mangaMusicMergeAdapter } from './mangaMusicMerge'
 import { LOCAL_STEPS } from './local'
 
 /** 已登记的 LLM 任务适配器（key = task id）。 */
@@ -94,7 +98,12 @@ export const LLM_ADAPTERS: Record<string, LlmTaskAdapter> = {
   'mergeReview:characters': mergeReviewAdapter,
   'mergeReview:factions': mergeReviewAdapter,
   'mergeReview:items': mergeReviewAdapter,
-  'mergeReview:creatures': mergeReviewAdapter
+  'mergeReview:creatures': mergeReviewAdapter,
+  // C 线：漫画生产链（与正片的 storyScript/effectAnnotation 并列，不是覆盖）
+  mangaScript: mangaScriptAdapter,
+  mangaEffects: mangaEffectsAdapter,
+  mangaMusic: mangaMusicAdapter,
+  mangaMusicMerge: mangaMusicMergeAdapter
 }
 
 /** 已登记的本地程序步骤（key = task id）。 */
@@ -121,4 +130,8 @@ export { draftAdapter, draftKeyOf } from './draft'
 export { draftCharacterAdapter } from './draftCharacter'
 export { draftOtherAdapter } from './draftOther'
 export { mergeReviewAdapter, mergeReviewKeyOf } from './mergeReview'
+export { mangaScriptAdapter } from './mangaScript'
+export { mangaEffectsAdapter, MANGA_EFFECT_CATALOG } from './mangaEffects'
+export { mangaMusicAdapter } from './mangaMusic'
+export { mangaMusicMergeAdapter } from './mangaMusicMerge'
 export { LOCAL_STEPS, LOCAL_TASK_IDS } from './local'

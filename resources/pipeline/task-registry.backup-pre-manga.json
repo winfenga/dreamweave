@@ -1,0 +1,574 @@
+[
+ {
+  "id": "cacheWarming",
+  "kind": "cacheWarming",
+  "code": "CacheWarming",
+  "label": "缓存预热",
+  "feature": "always",
+  "execution": "并行",
+  "input": "带行号原文",
+  "output": "接收确认",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 16384,
+  "global": false,
+  "setting": "cacheWarming",
+  "dependsOn": []
+ },
+ {
+  "id": "seg",
+  "kind": "seg",
+  "code": "ChapterSeg",
+  "label": "叙事分段",
+  "feature": "events",
+  "execution": "并行",
+  "input": "原文",
+  "output": "段边界、名称、摘要",
+  "model": true,
+  "thinking": "disabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "seg",
+  "dependsOn": [
+   "cacheWarming:i"
+  ]
+ },
+ {
+  "id": "chunkLocationSummary",
+  "kind": "chunkLocationSummary",
+  "code": "ChunkLocationSummary",
+  "label": "空间关系摘要",
+  "feature": "visualNovel",
+  "execution": "并行",
+  "input": "原文",
+  "output": "chunk 空间关系摘要",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "chunkLocationSummary",
+  "dependsOn": [
+   "cacheWarming:i"
+  ]
+ },
+ {
+  "id": "settingSummary",
+  "kind": "settingSummary",
+  "code": "ChunkSettingSummary",
+  "label": "设定和力量体系摘要",
+  "feature": "any",
+  "execution": "按 chunk 并行",
+  "input": "当前 chunk 原文",
+  "output": "有来源、条件与例外的设定和力量体系摘要",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "settingSummary",
+  "dependsOn": [
+   "cacheWarming:i"
+  ]
+ },
+ {
+  "id": "locationTree",
+  "kind": "locationTree",
+  "code": "LocationTree",
+  "label": "路径地图地点树",
+  "feature": "visualNovel",
+  "execution": "按输入预算动态分批串行，最后程序发布",
+  "input": "上一批地点邻接表、本批连续空间关系摘要",
+  "output": "增量批次；最终邻接表、children 树、实际挂接记录",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 120000.0,
+  "global": true,
+  "setting": "locationTree",
+  "dependsOn": [
+   "chunkLocationSummary:*"
+  ]
+ },
+ {
+  "id": "batchLocationSummary",
+  "kind": "batchLocationSummary",
+  "code": "BatchLocationSummary",
+  "label": "批次空间摘要",
+  "feature": "visualNovel",
+  "execution": "首批覆盖全书时直接复用；有剩余 chunk 时按批压缩，最后汇总",
+  "input": "本批空间摘要、可展示地点索引",
+  "output": "单批原摘要拼接，或多批压缩后的空间摘要",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 1,
+  "maxTokens": 120000.0,
+  "global": true,
+  "setting": "batchLocationSummary",
+  "dependsOn": [
+   "locationTree"
+  ]
+ },
+ {
+  "id": "impressionLayout",
+  "kind": "impressionLayout",
+  "code": "ImpressionLayout",
+  "label": "世界印象地图布局",
+  "feature": "visualNovel",
+  "execution": "全书一次",
+  "input": "筛选后的地点邻接表、全部批次空间摘要",
+  "output": "100×100 父区域局部布局 JSON",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 120000.0,
+  "global": true,
+  "setting": "impressionLayout",
+  "dependsOn": [
+   "locationTree",
+   "batchLocationSummary"
+  ]
+ },
+ {
+  "id": "plot",
+  "kind": "plot",
+  "code": "Plot",
+  "label": "剧情摘要",
+  "feature": "any",
+  "execution": "按 chunk 并行（旧提示词快照仍按记忆顺序执行）",
+  "input": "当前 chunk 原文",
+  "output": "章摘要、chunk 摘要",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "plot",
+  "dependsOn": [
+   "cacheWarming:i"
+  ]
+ },
+ {
+  "id": "worldImpression",
+  "kind": "worldImpression",
+  "code": "WorldImpression",
+  "label": "世界印象",
+  "feature": "visualNovel",
+  "execution": "全书一次",
+  "input": "全部 chunk 摘要",
+  "output": "世界印象、小说类型、美术风格",
+  "model": true,
+  "thinking": "disabled",
+  "effort": 1,
+  "maxTokens": 20000.0,
+  "global": true,
+  "setting": "worldImpression",
+  "dependsOn": [
+   "plot:*"
+  ]
+ },
+ {
+  "id": "draft",
+  "kind": "draft",
+  "code": "Draft",
+  "label": "条目草稿（旧项目）",
+  "feature": "entities",
+  "execution": "依赖就绪后并行",
+  "input": "原文、M[i]、下一片摘要（仅辅助理解）",
+  "output": "人物、势力、物品草稿",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "draft",
+  "dependsOn": [
+   "cacheWarming:i",
+   "memoryBefore:i",
+   "plot:next"
+  ]
+ },
+ {
+  "id": "draftCharacter",
+  "kind": "draftCharacter",
+  "code": "DraftCharacter",
+  "label": "人物草稿",
+  "feature": "entities",
+  "execution": "依赖就绪后并行",
+  "input": "原文、M[i]、下一片摘要（仅辅助理解）",
+  "output": "人物与身份匹配排除词",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "draftCharacter",
+  "dependsOn": [
+   "cacheWarming:i",
+   "memoryBefore:i",
+   "plot:next"
+  ]
+ },
+ {
+  "id": "draftOther",
+  "kind": "draftOther",
+  "code": "DraftOther",
+  "label": "其他条目草稿",
+  "feature": "entities",
+  "execution": "依赖就绪后并行",
+  "input": "原文、M[i]、下一片摘要（仅辅助理解）",
+  "output": "势力、物品、生物草稿",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "draftOther",
+  "dependsOn": [
+   "cacheWarming:i",
+   "memoryBefore:i",
+   "plot:next"
+  ]
+ },
+ {
+  "id": "merge",
+  "kind": "merge",
+  "code": "Merge",
+  "label": "机械合并",
+  "feature": "entities",
+  "execution": "全书一次",
+  "input": "全部实体草稿",
+  "output": "机械合并实体",
+  "model": false,
+  "thinking": "enabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": true,
+  "dependsOn": [
+   "draft:*"
+  ]
+ },
+ {
+  "id": "mergeReview:characters",
+  "kind": "mergeReview",
+  "code": "MergeReview",
+  "label": "人物复核",
+  "feature": "characters",
+  "execution": "各类别并行",
+  "input": "人物机械合并结果",
+  "output": "人物复核结果",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": true,
+  "setting": "mergeReview",
+  "dependsOn": [
+   "merge"
+  ]
+ },
+ {
+  "id": "mergeReview:factions",
+  "kind": "mergeReview",
+  "code": "MergeReview",
+  "label": "势力复核",
+  "feature": "factions",
+  "execution": "各类别并行",
+  "input": "势力机械合并结果",
+  "output": "势力复核结果",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": true,
+  "setting": "mergeReview",
+  "dependsOn": [
+   "merge"
+  ]
+ },
+ {
+  "id": "mergeReview:items",
+  "kind": "mergeReview",
+  "code": "MergeReview",
+  "label": "物品复核",
+  "feature": "items",
+  "execution": "各类别并行",
+  "input": "物品机械合并结果",
+  "output": "物品复核结果",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": true,
+  "setting": "mergeReview",
+  "dependsOn": [
+   "merge"
+  ]
+ },
+ {
+  "id": "mergeReview:creatures",
+  "kind": "mergeReview",
+  "code": "MergeReview",
+  "label": "生物复核",
+  "feature": "creatures",
+  "execution": "各类别并行",
+  "input": "生物机械合并结果",
+  "output": "生物复核结果",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": true,
+  "setting": "mergeReview",
+  "dependsOn": [
+   "merge"
+  ]
+ },
+ {
+  "id": "canonical",
+  "kind": "merge",
+  "code": "MergedWorldObj",
+  "label": "MergedWorldObj",
+  "feature": "entities",
+  "execution": "全书一次",
+  "input": "实体复核结果",
+  "output": "唯一标准实体与 ID 映射",
+  "model": false,
+  "thinking": "enabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": true,
+  "dependsOn": [
+   "mergeReview:selected"
+  ]
+ },
+ {
+  "id": "characterAppearance",
+  "kind": "characterAppearance",
+  "code": "CharacterAppearance",
+  "label": "人物形象合并",
+  "feature": "characters",
+  "execution": "按输入 token 预算分批并行；单套有效形象直接复用（旧项目按人物）",
+  "input": "人物 ID 与形象描述；全空时使用名称、别名、身份线索和首个切片摘要",
+  "output": "人物形象及 appearanceId、覆盖切片",
+  "model": true,
+  "thinking": "disabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": true,
+  "setting": "characterAppearance",
+  "dependsOn": [
+   "canonical"
+  ]
+ },
+ {
+  "id": "draftAlign",
+  "kind": "draftAlign",
+  "code": "DraftAlign",
+  "label": "草稿对齐",
+  "feature": "entities",
+  "execution": "并行",
+  "input": "本片草稿、标准实体映射",
+  "output": "对齐后的本片实体",
+  "model": false,
+  "thinking": "enabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": false,
+  "dependsOn": [
+   "draft:i",
+   "canonical"
+  ]
+ },
+ {
+  "id": "characterRelation",
+  "kind": "characterRelation",
+  "code": "CharacterRelation",
+  "label": "人物关系",
+  "feature": "relations",
+  "execution": "并行",
+  "input": "原文、人物列表、阅读记忆",
+  "output": "人物关系",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "characterRelation",
+  "dependsOn": [
+   "cacheWarming:i",
+   "draftAlign:i",
+   "memoryBefore:i"
+  ]
+ },
+ {
+  "id": "lineAnnotation",
+  "kind": "lineAnnotation",
+  "code": "LineAnnotation",
+  "label": "逐行标注",
+  "feature": "visualNovel",
+  "execution": "并行",
+  "input": "原文、精简地点树、人物列表、阅读记忆",
+  "output": "逐章原文行标注与剧情地点",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 120000.0,
+  "global": false,
+  "setting": "lineAnnotation",
+  "dependsOn": [
+   "cacheWarming:i",
+   "draftAlign:i",
+   "memoryBefore:i",
+   "locationTree",
+   "characterAppearance"
+  ]
+ },
+ {
+  "id": "plotLocation",
+  "kind": "plotLocation",
+  "code": "PlotLocation",
+  "label": "剧情地点",
+  "feature": "visualNovel",
+  "execution": "按 chunk 并行，故事脚本之前",
+  "input": "原文、精简地点树、本片人物、阅读记忆",
+  "output": "剧情地点目录与场景描述",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 120000.0,
+  "global": false,
+  "setting": "plotLocation",
+  "dependsOn": [
+   "cacheWarming:i",
+   "draftAlign:i",
+   "memoryBefore:i",
+   "locationTree"
+  ]
+ },
+ {
+  "id": "storyScript",
+  "kind": "storyScript",
+  "code": "StoryScript",
+  "label": "故事脚本",
+  "feature": "visualNovel",
+  "execution": "并行",
+  "input": "原文、剧情地点目录、人物列表、阅读记忆",
+  "output": "逐章行动",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 120000.0,
+  "global": false,
+  "setting": "storyScript",
+  "dependsOn": [
+   "cacheWarming:i",
+   "draftAlign:i",
+   "memoryBefore:i",
+   "locationTree",
+   "characterAppearance",
+   "plotLocation:i"
+  ]
+ },
+ {
+  "id": "effectAnnotation",
+  "kind": "effectAnnotation",
+  "code": "EffectAnnotation",
+  "label": "特效标注",
+  "feature": "visualNovel",
+  "execution": "脚本修复结束后按原批次并行追加对话",
+  "input": "已修复脚本的完整多轮对话",
+  "output": "叙事语义、人物情绪及天气与室内外区间",
+  "model": true,
+  "thinking": "disabled",
+  "effort": 2,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "effectAnnotation",
+  "dependsOn": [
+   "storyScript:i"
+  ]
+ },
+ {
+  "id": "performanceReview",
+  "kind": "performanceReview",
+  "code": "PerformanceReview",
+  "label": "脚本与特效精校",
+  "feature": "visualNovel",
+  "execution": "语义标注后按原批次追加对话",
+  "input": "原文、人物地点目录、当前脚本和语义",
+  "output": "有明确依据的字段与语义补丁",
+  "model": true,
+  "thinking": "disabled",
+  "effort": 2,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "performanceReview",
+  "dependsOn": [
+   "storyScript:i",
+   "effectAnnotation:i"
+  ]
+ },
+ {
+  "id": "plotLocationMerge",
+  "kind": "plotLocationMerge",
+  "code": "PlotLocationMerge",
+  "label": "剧情地点合并",
+  "feature": "visualNovel",
+  "execution": "剧情地点及已选故事脚本完成后，按输入预算分批并行",
+  "input": "地图地点及剧情地点描述",
+  "output": "统一剧情地点与原 ID 映射",
+  "model": true,
+  "thinking": "enabled",
+  "effort": 2,
+  "maxTokens": 120000.0,
+  "global": true,
+  "setting": "plotLocationMerge",
+  "dependsOn": [
+   "plotLocation:*",
+   "storyScript:*",
+   "locationTree"
+  ]
+ },
+ {
+  "id": "event",
+  "kind": "event",
+  "code": "Event",
+  "label": "事件脉络",
+  "feature": "events",
+  "execution": "框架后分篇；篇内批次串行",
+  "input": "段、章、chunk 摘要",
+  "output": "全书事件图",
+  "model": false,
+  "thinking": "disabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": true,
+  "setting": "event",
+  "dependsOn": [
+   "plot:*",
+   "seg:*"
+  ]
+ },
+ {
+  "id": "compact",
+  "kind": "compact",
+  "code": "Compact",
+  "label": "阅读记忆压缩",
+  "feature": "any",
+  "execution": "字符超限时动态执行",
+  "input": "待压缩旧记忆",
+  "output": "压缩摘要",
+  "model": true,
+  "thinking": "disabled",
+  "effort": 1,
+  "maxTokens": 60000.0,
+  "global": false,
+  "setting": "compact",
+  "dependsOn": [
+   "memoryBefore:i"
+  ]
+ }
+]
