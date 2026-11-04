@@ -610,9 +610,14 @@ function chapterLabel(ch: MangaChapter): string {
       <span>本页没有台词数据</span>
     </div>
 
-    <!-- ===== 设置抽屉（底部上滑、纵向滚动） ===== -->
-    <transition name="mr-sheet">
-      <div v-if="drawerOpen" class="mr-drawer" data-testid="mr-drawer">
+    <!-- ===== 设置抽屉（底部上滑、纵向滚动） =====
+         用纯 CSS 入场动画（animation）而不是 <transition>。
+         实测：<transition> 包 v-if 时，若在离开动画播完前重新打开，
+         Vue 会把仍在 leave 阶段的 DOM 节点复用到 enter 阶段，
+         结果抽屉里的内容**冻结在创建时的快照**（页码停在 1/11 不再更新）。
+         用户快速点两下开关就会踩到。animation 不产生「leave 中间态节点」，
+         节点每次都重新挂载，内容恒为实时值。 -->
+    <div v-if="drawerOpen" class="mr-drawer" data-testid="mr-drawer">
         <div class="mr-drawer-head">
           <span>阅读选项</span>
           <button class="mr-btn small" @click="drawerOpen = false">收起</button>
@@ -733,8 +738,7 @@ function chapterLabel(ch: MangaChapter): string {
             </ul>
           </section>
         </div>
-      </div>
-    </transition>
+    </div>
 
     <!-- 隐藏预加载图：唯一职责是提供当前页的原始像素尺寸（natural）。
          一格模式的容器比例依赖它；可见图不能兼任，否则会形成
@@ -1188,14 +1192,18 @@ function chapterLabel(ch: MangaChapter): string {
   top: -9999px;
 }
 
-/* 抽屉动画 */
-.mr-sheet-enter-active,
-.mr-sheet-leave-active {
-  transition: transform 0.22s ease, opacity 0.22s ease;
+/* 抽屉入场动画（用 animation 而非 transition：见模板处注释） */
+@keyframes mr-sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
-.mr-sheet-enter-from,
-.mr-sheet-leave-to {
-  transform: translateY(24px);
-  opacity: 0;
+.mr-drawer {
+  animation: mr-sheet-in 0.2s ease;
 }
 </style>

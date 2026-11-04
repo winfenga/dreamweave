@@ -30,6 +30,18 @@ import type {
   ImagegenProbeResult,
   ImagegenTargetsResult
 } from '../shared/imagegen-types'
+import type {
+  CardExportRequest,
+  CardExportResult,
+  CharacterCardListResult,
+  CharacterCardResult,
+  TavernGenerateRequest,
+  TavernGenerateResult,
+  TavernMessage,
+  TavernParams,
+  TavernSaveResult,
+  TavernSettings
+} from '../shared/character-card-types'
 
 export type { ImportResult, ModelSettings, SpeakResult } from '../shared/app-types'
 export type { ReadingSegment, SourceReadResult } from '../shared/app-types'
@@ -184,7 +196,33 @@ const api = {
     ipcRenderer.invoke('imagegen:targets', pkgId),
   /** 单张生成 + 回填（批量由渲染层逐张串行调用，前端显示 N/M） */
   imagegenGenerate: (pkgId: string, req: ImagegenGenerateRequest): Promise<ImagegenGenerateResult> =>
-    ipcRenderer.invoke('imagegen:generate', pkgId, req)
+    ipcRenderer.invoke('imagegen:generate', pkgId, req),
+
+  // —— 角色卡 + 内置酒馆 ——
+  /** 角色卡列表（轻量投影，不含档案正文） */
+  cardList: (): Promise<CharacterCardListResult> => ipcRenderer.invoke('card:list'),
+  /** 单张角色卡详情（含相关世界书与已有会话） */
+  cardGet: (cardId: string): Promise<CharacterCardResult> => ipcRenderer.invoke('card:get', cardId),
+  /**
+   * 导出角色卡。
+   * PNG = SillyTavern 卡片（立绘 + tEXt 内嵌 V2/V3 JSON）；JSON = 独立文件。
+   * 不传 outDir 时主进程弹目录选择框。
+   */
+  cardExport: (req: CardExportRequest): Promise<CardExportResult> => ipcRenderer.invoke('card:export', req),
+  /** 读酒馆设置（无则返回 null，由渲染层补默认） */
+  tavernGetSettings: (): Promise<TavernSettings | null> => ipcRenderer.invoke('tavern:getSettings'),
+  /** 存酒馆设置 */
+  tavernSaveSettings: (s: TavernSettings): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('tavern:saveSettings', s),
+  /** 生成一条角色回复 */
+  tavernGenerate: (req: TavernGenerateRequest): Promise<TavernGenerateResult> =>
+    ipcRenderer.invoke('tavern:generate', req),
+  /** 保存对话（按卡片 id 归并，一本书一套会话） */
+  tavernSaveSession: (
+    cardId: string,
+    messages: TavernMessage[],
+    params: TavernParams | null
+  ): Promise<TavernSaveResult> => ipcRenderer.invoke('tavern:saveSession', cardId, messages, params)
 }
 
 export type FeatherApi = typeof api

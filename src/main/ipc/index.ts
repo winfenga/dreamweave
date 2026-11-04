@@ -20,7 +20,7 @@ import { buildViewData } from '../t2w/view'
 import { buildMangaView } from '../t2w/manga'
 import { readPackage } from '../t2w'
 import { loadSettings, saveSettings, validateBaseURL } from '../settings/store'
-import { resolveStorePath } from '../workspace/assets'
+import { readAsset, resolveStorePath } from '../workspace/assets'
 import { readIndex } from '../workspace/index-store'
 import {
   allocWorkspaceDirName,
@@ -54,7 +54,7 @@ import {
   parseStatus as pipelineParseStatus,
   start as pipelineStart
 } from '../pipeline/orchestrator'
-import { probeProvider, saveProviders } from '../pipeline/providers'
+import { activeProvider, probeProvider, saveProviders } from '../pipeline/providers'
 import { buildTasksOverview } from '../pipeline/overview'
 import type {
   EffectCatalogResult,
@@ -70,6 +70,28 @@ import type {
   ImagegenTargetsResult
 } from '../../shared/imagegen-types'
 import { imagegenGenerate, imagegenTargets, probeImagegen } from '../imagegen'
+import {
+  defaultExportDirName,
+  exportCards,
+  getCard,
+  listCards,
+  loadTavernSettings,
+  saveSession,
+  saveTavernSettings,
+  tavernGenerate
+} from '../character-card'
+import type {
+  CardExportRequest,
+  CardExportResult,
+  CharacterCardListResult,
+  CharacterCardResult,
+  TavernGenerateRequest,
+  TavernGenerateResult,
+  TavernMessage,
+  TavernParams,
+  TavernSettings
+} from '../../shared/character-card-types'
+import type { T2wManifest } from '../../shared/t2w-types'
 
 export const IPC = {
   importPackage: 't2w:import',
@@ -77,6 +99,23 @@ export const IPC = {
   view: 't2w:view',
   /** 漫画线投影模型（独立通道：漫画包不产出 storyScript） */
   mangaView: 't2w:mangaView',
+
+  // —— 角色卡 + 内置酒馆 ——
+  /** 角色卡列表（轻量投影） */
+  cardList: 'card:list',
+  /** 单张角色卡详情（含世界书与已有会话） */
+  cardGet: 'card:get',
+  /** 导出角色卡（PNG = SillyTavern 卡片 / JSON） */
+  cardExport: 'card:export',
+  /** 读取酒馆设置 */
+  tavernGetSettings: 'tavern:getSettings',
+  /** 保存酒馆设置 */
+  tavernSaveSettings: 'tavern:saveSettings',
+  /** 生成一条角色回复 */
+  tavernGenerate: 'tavern:generate',
+  /** 保存对话会话 */
+  tavernSaveSession: 'tavern:saveSession',
+
   settingsGet: 'settings:get',
   settingsSave: 'settings:save',
   /** 合成一段文本（缓存优先；未配置模型接入时返回可读错误，不发起请求） */
@@ -377,6 +416,118 @@ export function registerIpc(): void {
       const data = buildMangaView(manifest, session.assetBase)
       if (!data) return { ok: false, error: EMPTY_MANGA_HINT }
       return { ok: true, data }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  // ===========================================================================
+  // 角色卡 + 内置酒馆
+  // ===========================================================================
+  /** 取当前工作库的 manifest（三个 card 通道共用；无书库时返回可读错误）。 */
+  const currentManifest = async (): Promise<
+    { ok: true; root: string; assetBase: string; manifest: T2wManifest } | { ok: false; error: string }
+  > => {
+    const session = getWorkspaceSession()
+    if (!session) return { ok: false, error: '尚未导入任何工作库' }
+    const index = await readIndex(session.root)
+    const manifest = await assembleManifest(session.root, index)
+    return { ok: true, root: session.root, assetBase: session.assetBase, manifest }
+  }
+
+  ipcMain.handle(IPC.cardList, async (): Promise<CharacterCardListResult> => {
+    try {
+      const cur = await currentManifest()
+      if (!cur.ok) return { ok: false, error: cur.error }
+      return listCards(cur.manifest, cur.assetBase)
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle(IPC.cardGet, async (_e, cardId: string): Promise<CharacterCardResult> => {
+    try {
+      const cur = await currentManifest()
+      if (!cur.ok) return { ok: false, error: cur.error }
+      return await getCard(cur.manifest, cur.assetBase, cur.root, cardId)
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle(IPC.cardExport, async (event, req: CardExportRequest): Promise<CardExportResult> => {
+    try {
+      const cur = await currentManifest()
+      if (!cur.ok) return { ok: false, error: cur.error }
+
+      // 目录选择：不传 outDir 时弹框，默认落在「下载」目录下的日期子目录
+      let outDir = req.outDir ?? ''
+      if (!outDir) {
+        const win = BrowserWindow.fromWebContents(event.sender)
+        const picked = await dialog.showOpenDialog(win as BrowserWindow, {
+          title: '选择角色卡导出目录',
+          properties: ['openDirectory', 'createDirectory'],
+          defaultPath: join(app.getPath('downloads'), defaultExportDirName(cur.manifest.project?.title ?? ''))
+        })
+        if (picked.canceled || !picked.filePaths.length) return { ok: false, canceled: true }
+        outDir = picked.filePaths[0]
+      }
+
+      return await exportCards(
+        cur.manifest,
+        cur.assetBase,
+        req,
+        async (entryPath) => {
+          try {
+            return await readAsset(cur.root, entryPath)
+          } catch {
+            return null
+          }
+        },
+        outDir
+      )
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle(IPC.tavernGetSettings, async (): Promise<TavernSettings | null> => {
+    try {
+      const cur = await currentManifest()
+      if (!cur.ok) return null
+      return await loadTavernSettings(cur.root)
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle(IPC.tavernSaveSettings, async (_e, settings: TavernSettings) => {
+    try {
+      const cur = await currentManifest()
+      if (!cur.ok) return { ok: false, error: cur.error }
+      return await saveTavernSettings(cur.root, settings)
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle(IPC.tavernSaveSession, async (_e, cardId: string, messages: TavernMessage[], params: TavernParams) => {
+    try {
+      const cur = await currentManifest()
+      if (!cur.ok) return { ok: false, error: cur.error }
+      return await saveSession(cur.root, cardId, messages, params)
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle(IPC.tavernGenerate, async (_e, req: TavernGenerateRequest): Promise<TavernGenerateResult> => {
+    try {
+      const cur = await currentManifest()
+      if (!cur.ok) return { ok: false, error: cur.error }
+      // 用当前选中的 LLM 配置（与流水线同一套 provider 设置，不另起一套）
+      const provider = await activeProvider('llm')
+      return await tavernGenerate(cur.manifest, cur.assetBase, cur.root, req, provider as never)
     } catch (e) {
       return { ok: false, error: (e as Error).message }
     }
