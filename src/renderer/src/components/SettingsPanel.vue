@@ -17,6 +17,7 @@ import {
   DEFAULT_CHAR_PROMPT_TEMPLATE,
   DEFAULT_ICON_PROMPT_TEMPLATE,
   DEFAULT_NEGATIVE_PROMPT,
+  DEFAULT_SCENE_NEGATIVE_PROMPT,
   DEFAULT_SCENE_PROMPT_TEMPLATE,
   DEFAULT_WORKFLOW_JSON,
   ICON_TEMPLATE_HINT,
@@ -51,6 +52,16 @@ const comfyNegative = ref('')
 const comfyCharTpl = ref('')
 const comfyIconTpl = ref('')
 const comfySceneTpl = ref('')
+/** D2：场景专用负面词（与人物那份相反） */
+const comfySceneNegative = ref('')
+/** B：画风预设 */
+const comfyCharArtPreset = ref<'anime' | 'realistic' | 'custom'>('anime')
+const comfyCharArtCustom = ref('')
+const comfySceneArtPreset = ref<'anime' | 'custom'>('anime')
+const comfySceneArtCustom = ref('')
+/** C2：LLM 提示词改写 */
+const comfyRewriteEnabled = ref(false)
+const comfyRewriteTarget = ref<'qwen-image-2.1' | 'moss-image' | 'generic'>('qwen-image-2.1')
 const comfyWorkflow = ref('')
 const comfyProbeState = ref('')
 const comfyProbing = ref(false)
@@ -84,6 +95,13 @@ async function loadAll(): Promise<void> {
   comfyCharTpl.value = c.charPromptTemplate
   comfyIconTpl.value = c.iconPromptTemplate
   comfySceneTpl.value = c.scenePromptTemplate ?? DEFAULT_SCENE_PROMPT_TEMPLATE
+  comfySceneNegative.value = c.sceneNegativePrompt ?? DEFAULT_SCENE_NEGATIVE_PROMPT
+  comfyCharArtPreset.value = c.charArtStylePreset ?? 'anime'
+  comfyCharArtCustom.value = c.charArtStyleCustom ?? ''
+  comfySceneArtPreset.value = c.sceneArtStylePreset ?? 'anime'
+  comfySceneArtCustom.value = c.sceneArtStyleCustom ?? ''
+  comfyRewriteEnabled.value = c.promptRewriteEnabled === true
+  comfyRewriteTarget.value = c.promptRewriteTarget ?? 'qwen-image-2.1'
   comfyWorkflow.value = c.workflowJson
 }
 
@@ -182,6 +200,13 @@ async function save(): Promise<void> {
       charPromptTemplate: comfyCharTpl.value,
       iconPromptTemplate: comfyIconTpl.value,
       scenePromptTemplate: comfySceneTpl.value,
+      sceneNegativePrompt: comfySceneNegative.value,
+      charArtStylePreset: comfyCharArtPreset.value,
+      charArtStyleCustom: comfyCharArtCustom.value,
+      sceneArtStylePreset: comfySceneArtPreset.value,
+      sceneArtStyleCustom: comfySceneArtCustom.value,
+      promptRewriteEnabled: comfyRewriteEnabled.value,
+      promptRewriteTarget: comfyRewriteTarget.value,
       workflowJson: comfyWorkflow.value
     }
   })
@@ -304,10 +329,66 @@ async function save(): Promise<void> {
       <span>CFG <input v-model.number="comfyCfg" type="number" min="1" max="30" step="0.5" style="width: 80px" data-testid="comfy-cfg" /></span>
     </div>
     <div class="field">
-      <label>负面提示词（多行）</label>
+      <label>人物/图标负面提示词（要求透明背景）</label>
       <textarea v-model="comfyNegative" rows="3" data-testid="comfy-negative" style="width: 100%; font-family: ui-monospace, SFMono-Regular, Consolas, monospace" />
+      <div class="hint">用于人物立绘与地图图标。已压制「背景 / 白色背景 / 白边」，确保出图为透明底。</div>
       <div style="margin-top: 4px">
         <button class="btn" data-testid="comfy-negative-reset" @click="comfyNegative = DEFAULT_NEGATIVE_PROMPT">恢复默认</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>场景图负面提示词（要求背景充实）</label>
+      <textarea v-model="comfySceneNegative" rows="3" data-testid="comfy-scene-negative" style="width: 100%; font-family: ui-monospace, SFMono-Regular, Consolas, monospace" />
+      <div class="hint">
+        用于场景背景图。与上面那份**相反**：压制「空白背景 / 透明背景」，并要求不含人物。
+        两者对背景的要求互斥，不能共用一份。
+      </div>
+      <div style="margin-top: 4px">
+        <button class="btn" data-testid="comfy-scene-negative-reset" @click="comfySceneNegative = DEFAULT_SCENE_NEGATIVE_PROMPT">恢复默认</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>人物画风预设</label>
+      <select v-model="comfyCharArtPreset" data-testid="comfy-char-art-preset" style="width: 100%">
+        <option value="anime">精致二次元立绘（默认）</option>
+        <option value="realistic">电影质感真人</option>
+        <option value="custom">自定义</option>
+      </select>
+      <div v-if="comfyCharArtPreset === 'custom'" style="margin-top: 6px">
+        <textarea v-model="comfyCharArtCustom" rows="6" data-testid="comfy-char-art-custom" placeholder="填写自定义画风文本（作为 {{artStyle}} 注入人物模板）" style="width: 100%; font-family: ui-monospace, SFMono-Regular, Consolas, monospace" />
+      </div>
+      <div class="hint">
+        包内自带 <code>:character-art-style</code> 时**以包内为准**，此处预设仅作缺省兜底
+        （避免与包内画风重复两遍）。
+      </div>
+    </div>
+    <div class="field">
+      <label>场景画风预设</label>
+      <select v-model="comfySceneArtPreset" data-testid="comfy-scene-art-preset" style="width: 100%">
+        <option value="anime">日式手绘动画背景（默认）</option>
+        <option value="custom">自定义</option>
+      </select>
+      <div v-if="comfySceneArtPreset === 'custom'" style="margin-top: 6px">
+        <textarea v-model="comfySceneArtCustom" rows="6" data-testid="comfy-scene-art-custom" placeholder="填写自定义画风文本（作为 {{artStyle}} 注入场景模板）" style="width: 100%; font-family: ui-monospace, SFMono-Regular, Consolas, monospace" />
+      </div>
+    </div>
+    <div class="field">
+      <label>
+        <input v-model="comfyRewriteEnabled" type="checkbox" data-testid="comfy-rewrite-enabled" />
+        启用 LLM 提示词改写
+      </label>
+      <div class="hint">
+        开启后，模板拼出的结构化描述会先交给 LLM 按目标模型规范重写，再送 ComfyUI。
+        改写失败会自动回落原模板输出，不会中断出图。
+        <b>需要先在「模型接入」里配置好一组 LLM。</b>
+      </div>
+      <div style="margin-top: 6px">
+        <label style="display: block; margin-bottom: 4px">目标模型</label>
+        <select v-model="comfyRewriteTarget" data-testid="comfy-rewrite-target" style="width: 100%">
+          <option value="qwen-image-2.1">Qwen-Image 2.1（400–500 词英文观察式描述 + 宽高比）</option>
+          <option value="moss-image">MOSS-Image（英文自然语言或 tag 串）</option>
+          <option value="generic">通用 / SD 系（75 token 内标签串）</option>
+        </select>
       </div>
     </div>
     <div class="field">
