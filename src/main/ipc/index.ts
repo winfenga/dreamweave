@@ -41,6 +41,7 @@ import {
 } from '../workspace/session'
 import { unpack } from '../workspace/unpack'
 import { buildTxtWorkspace } from '../workspace/txt-import'
+import { recognizeChaptersByLlm } from '../workspace/chapter-recognition-llm'
 import { speak } from '../tts'
 import { pickBgm, resolveBgm } from '../media'
 import { saveScriptAction, type ScriptSaveResult, type ScriptSaveTarget } from '../script-edit'
@@ -227,7 +228,18 @@ async function loadTxt(filePath: string): Promise<ImportResult> {
     const root = join(wsRoot, dirName)
 
     // 每次都新建：无 open-or-create 分支，无指纹比对，无去重
-    const index = await buildTxtWorkspace(filePath, root)
+    // §5：正则切章完全失败（只切出 1 章）时用 LLM 兜底判断章节结构。
+    // 兜底失败一律忽略，不阻断导入。
+    const index = await buildTxtWorkspace(filePath, root, {
+      chapterFallback: async (text: string) => {
+        try {
+          const r = await recognizeChaptersByLlm(text)
+          return r ? { charStarts: r.charStarts, titles: r.titles } : null
+        } catch {
+          return null
+        }
+      }
+    })
 
     // 记入工作库会话后，包内成员即可通过 t2w://<key>/<entryPath> 从工作库 assets/ 常驻访问
     setWorkspaceSession(makeSession(root, index))

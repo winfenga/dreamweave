@@ -314,7 +314,22 @@ function packChunks(ranges: ByteChapter[]): ChunkBox[] {
  *
  * 任一步异常 → 删 `index.json` 后 rethrow（与 unpack 同策略，绝不留下半成品）。
  */
-export async function buildTxtWorkspace(txtPath: string, root: string): Promise<WorkspaceIndex> {
+/**
+ * 构建 txt 工作库。
+ *
+ * @param txtPath 源 .txt 路径
+ * @param root 工作库根
+ * @param opts.chapterFallback §5：正则切章失败时的 LLM 兜底钩子。
+ *   仅当 `splitChapters()` 只切出 **1 章**（= 正则完全没命中，退化成整本单章）时才调用。
+ *   返回 null 表示放弃兜底，继续用单章结果——**绝不因为兜底失败就导入失败**。
+ */
+export async function buildTxtWorkspace(
+  txtPath: string,
+  root: string,
+  opts?: {
+    chapterFallback?: (text: string) => Promise<{ charStarts: number[]; titles: string[] } | null>
+  }
+): Promise<WorkspaceIndex> {
   const raw = await readFile(txtPath)
   const { text, encoding } = detectAndDecode(raw)
   const utf8Buf = Buffer.from(text, 'utf8')
@@ -326,7 +341,28 @@ export async function buildTxtWorkspace(txtPath: string, root: string): Promise<
   const title = basename(txtPath).replace(/\.[^.]+$/, '')
   const now = new Date().toISOString()
 
-  const charChapters = splitChapters(text, title)
+  let charChapters = splitChapters(text, title)
+  // §5 LLM 兜底：只切出 1 章说明正则完全没命中（否则至少 2 章）。
+  // 这是「切章失败」最明确的信号，也是最适合用 LLM 判断的场景。
+  if (charChapters.length <= 1 && opts?.chapterFallback) {
+    try {
+      const fb = await opts.chapterFallback(text)
+      if (fb && fb.charStarts.length >= 2) {
+        // 兜底结果转成与 splitChapters 同构的结构（charEnd 稍后回填）
+        const built: CharChapter[] = fb.charStarts.map((start, i) => ({
+          title: fb.titles[i] ?? `第 ${i + 1} 章`,
+          charStart: start,
+          charEnd: -1
+        }))
+        for (let i = 0; i < built.length; i++) {
+          built[i].charEnd = i + 1 < built.length ? built[i + 1].charStart : text.length
+        }
+        charChapters = built
+      }
+    } catch {
+      // 兜底失败一律忽略：继续用单章结果，导入不能因此中断
+    }
+  }
   const ranges = computeByteRanges(text, utf8Buf.length, charChapters)
   validateByteRanges(ranges, utf8Buf.length)
   const boxes = packChunks(ranges)
