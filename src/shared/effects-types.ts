@@ -59,6 +59,26 @@ export interface EffectCatalogEntry {
   description: string
   sound: string // 本期仅展示，不播放（Q6）
   tracks: EffectTrack[]
+  /**
+   * 判断依据（A2，来自新版 FB 目录）。
+   *
+   * `description` 说的是「这个特效怎么工作」，**不是**「什么时候该用它」。
+   * 实测 `portrait-cutin` 的 description 是「自动检测当前立绘的不透明顶部与底部…」，
+   * 模型看到这行不可能知道「普通说话别用这个」。`guide` 才是给模型看的：
+   * 固定套路 = 是什么 + 什么时候用 + 什么时候不用 + 硬性约束。
+   *
+   * 可选：FB 只覆盖了 28/74 条，其余 46 条没有对应（环境类与基础演出），
+   * 由 `catalogDigest()` 回落 `description`。
+   */
+  guide?: string
+  /**
+   * 该特效是否**必须指定人物**（A2）。
+   *
+   * `true` 时模型必须给出 `cId`；给不出就应返回空数组而不是硬猜。
+   * 目前只有 `portrait-cutin` 为 true（FB 里 e01/s08/s09 三条有此约束，
+   * 后两条是我们没有渲染实现的新特效，未写入目录）。
+   */
+  target?: boolean
 }
 
 export type EffectSource = 'manual' | 'ai'
@@ -141,6 +161,13 @@ export interface EffectSuggestInput {
   speaker?: string
   scene?: string
   type?: string
+  /**
+   * 本句在场的人物 id 列表（A4 新增，可选）。
+   *
+   * 用途：`target: true` 的特效必须指定人物，模型只能从这份清单里挑，
+   * 否则会编造出不存在的角色 id。缺省时提示里显示「（未知）」，模型不会被要求给 cId。
+   */
+  characterIds?: string[]
 }
 
 export interface EffectSuggestItem {
@@ -148,6 +175,14 @@ export interface EffectSuggestItem {
   name?: string
   reason?: string
   confidence?: number
+  /**
+   * 该特效作用于哪个角色（A3，可选）。
+   *
+   * 只有目录里 `target: true` 的特效才需要模型给出；其它特效即使给了也会被忽略。
+   * 模型给不出人物时应**不推荐该特效**，而不是硬猜一个（guide 原文即如此要求）。
+   * 缺省时渲染层回落「当前句说话人的立绘」，行为与加此字段前一致。
+   */
+  cId?: string
 }
 
 export interface EffectSuggestResult {
