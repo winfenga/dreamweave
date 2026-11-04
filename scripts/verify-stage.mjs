@@ -163,11 +163,15 @@ await send('Network.enable')
 // 不 reload 的话「打开设置」可能变成「关闭设置」，极难排查。
 await send('Page.reload', { ignoreCache: false })
 await sleep(2500)
+// reload 会重放上一轮的 console/网络事件，不清空会把旧诊断（如探针故意打的 404/403）
+// 混进本轮断言里，造成假失败。
+runtimeErrors.length = 0
+netFailures.length = 0
 await send('Page.bringToFront')
 await sleep(600)
 console.log('visibility:', await ev('document.visibilityState'))
 
-const P = process.argv[2] ?? 'D:/aaaTemp/基督山伯爵 · 前十章｜归航与陷阱 (1).t2w'
+const P = process.argv[2] ?? 'testdata/monte-cristo-10ch.t2w'
 
 section('0) 导入并切到演出页')
 console.log(
@@ -220,12 +224,26 @@ console.log(
     },
     navTo: async (idx) => {
       const v = window.__vs.view()
+      // 防御：idx 越界时（如 pick 没挑到目标、或包只有一章）不能蹦到 undefined.click，
+      // 那会让整个验收脚本中断在某个 section，看起来像产品崩了。
+      const total = v.actions.length
+      if (!Number.isInteger(idx) || idx < 0 || idx >= total) {
+        return { skipped: true, reason: 'idx=' + idx + ' 超出 0..' + (total - 1) }
+      }
       let acc = 0, ci = 0
       for (; ci < v.chapters.length; ci++) { if (acc + v.chapters[ci].count > idx) break; acc += v.chapters[ci].count }
+      if (ci >= v.chapters.length) ci = v.chapters.length - 1
       const off = idx - acc
-      window.__vs.qa('.chapter-pills .pill-btn')[ci].click()
+      const pill = window.__vs.qa('.chapter-pills .pill-btn')[ci]
+      if (!pill) return { skipped: true, reason: '章节点 #' + ci + ' 不存在' }
+      pill.click()
       await sleep(350)
-      for (let k = 0; k < off; k++) { window.__vs.nextBtn().click(); if (k % 50 === 0) await sleep(10) }
+      for (let k = 0; k < off; k++) {
+        const btn = window.__vs.nextBtn()
+        if (!btn) break
+        btn.click()
+        if (k % 50 === 0) await sleep(10)
+      }
       await sleep(450)
       return { chapterIdx: ci, offset: off }
     },
@@ -500,7 +518,32 @@ else {
   const idx = pick.idxClip >= 0 ? pick.idxClip : pick.idxStream
   await ev(`window.__vs.navTo(${idx})`)
   await sleep(400)
-  const before = await ev('window.__vs.hint()')
+
+  // 先量出这一句配音的真实时长：自动播放要等它播完才推进，
+  // 固定 20s 预算遇到 30s+ 的 clip 必然假失败（历史上的误判就栽在这里）。
+  const clipMs = await ev(`(async () => {
+    const v = window.__vs.view()
+    const a = v.actions[${idx}]
+    const key = a.type + '|' + a.chapterSeq + '|' + a.order
+    const clip = v.dubbing.find((d) => d.key === key)
+    if (!clip) return 0
+    return await new Promise((resolve) => {
+      const el = new Audio()
+      el.preload = 'metadata'
+      const done = (ms) => { try { el.src = '' } catch (e) {} ; resolve(ms) }
+      el.addEventListener('loadedmetadata', () => done(Math.round((el.duration || 0) * 1000)))
+      el.addEventListener('error', () => done(0))
+      el.src = clip.url
+      setTimeout(() => done(Math.round((el.duration || 0) * 1000)), 8000)
+    })
+  })()`)
+  // 预算 = 片段时长 + 12s 余量（打字机、切句、轮询粒度），下限 25s
+  const budgetMs = Math.max(25000, clipMs + 12000)
+  const maxPolls = Math.ceil(budgetMs / 500)
+  console.log(`  目标句配音时长 ${clipMs}ms → 轮询预算 ${budgetMs}ms（${maxPolls} 次）`)
+
+  const posOf = () => ev(`(() => { const s = window.__vs.state(); return s.chapterIdx + ':' + s.offset })()`)
+  const before = await posOf()
   const playClick = await clickEl('[data-testid=autoplay]')
   await sleep(300)
   const playing = await ev('window.__vs.state().playing')
@@ -508,10 +551,10 @@ else {
   let advanced = false
   let pace = ''
   const t0 = Date.now()
-  for (let k = 0; k < 40; k++) {
+  for (let k = 0; k < maxPolls; k++) {
     await sleep(500)
     pace = await ev('window.__vs.pace()')
-    if ((await ev('window.__vs.hint()')) !== before) {
+    if ((await posOf()) !== before) {
       advanced = true
       break
     }
@@ -520,15 +563,27 @@ else {
   console.log(`  点击=${playClick.ok}${playClick.ok ? '' : '(' + playClick.why + ')'} playing=${playing} 按钮「${btnText}」`)
   console.log(`  节奏角标：「${pace}」；${elapsed}ms 后推进=${advanced}`)
   check('点击自动播放后进入播放态', playClick.ok && playing === true, `按钮文字「${btnText}」`)
-  check('自动播放按配音节奏推进', advanced, `角标「${pace}」，${elapsed}ms`)
-  // 暂停后必须静止
+  check('自动播放按配音节奏推进', advanced, `角标「${pace}」，${elapsed}ms / 预算 ${budgetMs}ms`)
+  // 暂停后必须静止。用「句序 offset」判断而不是 hint 文案：
+  // hint 里含「第 N / 总数 句」，但用户在自动播放中按暂停时 StageView 会先清空 paceLabel、
+  // 且全屏/非全屏下 hint 可能被隐藏 —— 用 setupState 里的真实进度最可靠。
   const pauseClick = await clickEl('[data-testid=autoplay]')
   await sleep(300)
-  const p1 = await ev('window.__vs.hint()')
+  const pos1 = await ev(`(() => { const s = window.__vs.state(); return s.chapterIdx + ':' + s.offset })()`)
+  const playingAfterPause = await ev('window.__vs.state().playing')
   await sleep(2600)
-  const p2 = await ev('window.__vs.hint()')
-  check('暂停后不再推进', pauseClick.ok && p1 === p2, `「${p1}」→「${p2}」`)
-  check('playing 已置假', (await ev('window.__vs.state().playing')) === false)
+  const pos2 = await ev(`(() => { const s = window.__vs.state(); return s.chapterIdx + ':' + s.offset })()`)
+  check('暂停后不再推进', pauseClick.ok && pos1 === pos2, `句序「${pos1}」→「${pos2}」`)
+  check('playing 已置假', playingAfterPause === false, `playing=${playingAfterPause}`)
+
+  // 暂停必须能真正打断仍在进行的播放会话（历史 bug：pause 不触发 ended，
+  // promise 悬着 → autoRunning 不复位 → 再点自动播放毫无反应）
+  const restart = await clickEl('[data-testid=autoplay]')
+  await sleep(800)
+  const playing2 = await ev('window.__vs.state().playing')
+  await clickEl('[data-testid=autoplay]')
+  await sleep(200)
+  check('暂停后可再次启动自动播放', restart.ok && playing2 === true, `再次点击后 playing=${playing2}`)
 }
 
 section('⑨ 自动播放 · TTS 未配置兜底 + 定时器节奏')
@@ -536,13 +591,17 @@ section('⑨ 自动播放 · TTS 未配置兜底 + 定时器节奏')
   const idx = pick.idxNoClip >= 0 ? pick.idxNoClip : pick.idxClip
   if (idx < 0) skip('自动播放 · 定时器兜底', '该包没有无配音的对白句')
   else {
+    // 用「句序」判断是否推进，不用 hint 文案 —— 后者在全屏/紧凑布局下可能被隐藏
+    const posOf = () => ev(`(() => { const s = window.__vs.state(); return s.chapterIdx + ':' + s.offset })()`)
+
     // 9a) TTS 未配置 → 必须回退定时器且不卡死
     await ev(`(async () => { await window.feather.saveSettings({ autoplayPolicy: 'tts' })
       window.__vs.setSettings(await window.feather.getSettings()); return true })()`)
     await sleep(300)
     await ev(`window.__vs.navTo(${idx})`)
     await sleep(400)
-    const before = await ev('window.__vs.hint()')
+    const startedAt = Date.now()
+    const before = await posOf()
     await clickEl('[data-testid=autoplay]')
     let advanced = false
     let pace = ''
@@ -550,13 +609,13 @@ section('⑨ 自动播放 · TTS 未配置兜底 + 定时器节奏')
     for (let k = 0; k < 40; k++) {
       await sleep(500)
       pace = await ev('window.__vs.pace()')
-      if ((await ev('window.__vs.hint()')) !== before) {
+      if ((await posOf()) !== before) {
         advanced = true
         break
       }
     }
     const elapsed = Date.now() - t0
-    console.log(`  TTS 策略角标：「${pace}」；${elapsed}ms 后推进=${advanced}`)
+    console.log(`  TTS 策略角标：「${pace}」；${elapsed}ms 后推进=${advanced}（导航于 ${startedAt}）`)
     check('TTS 未配置 → 定时器兜底且不卡死', advanced, `角标「${pace}」，${elapsed}ms`)
     check('角标说明回退原因', pace.indexOf('定时器') >= 0 || pace.indexOf('TTS') >= 0, `「${pace}」`)
     await clickEl('[data-testid=autoplay]')
@@ -568,7 +627,7 @@ section('⑨ 自动播放 · TTS 未配置兜底 + 定时器节奏')
     await sleep(300)
     await ev(`window.__vs.navTo(${idx})`)
     await sleep(400)
-    const before2 = await ev('window.__vs.hint()')
+    const before2 = await posOf()
     await clickEl('[data-testid=autoplay]')
     let advanced2 = false
     let pace2 = ''
@@ -576,7 +635,7 @@ section('⑨ 自动播放 · TTS 未配置兜底 + 定时器节奏')
     for (let k = 0; k < 40; k++) {
       await sleep(500)
       pace2 = await ev('window.__vs.pace()')
-      if ((await ev('window.__vs.hint()')) !== before2) {
+      if ((await posOf()) !== before2) {
         advanced2 = true
         break
       }
