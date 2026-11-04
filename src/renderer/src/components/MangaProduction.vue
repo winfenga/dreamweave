@@ -23,6 +23,7 @@ import type {
   PageVoiceCard,
   ProductionOverview
 } from '../../../main/manga-production/index'
+import type { MangaLorebook, MangaLoreEntry } from '../../../main/manga-production/lorebook'
 
 const props = defineProps<{
   chapterSeq: number
@@ -37,6 +38,14 @@ const overview = ref<ProductionOverview | null>(null)
 const page = ref<PageProduction | null>(null)
 const voices = ref<PageVoiceCard[]>([])
 const music = ref<ChapterMusicCard | null>(null)
+const lorebook = ref<MangaLorebook | null>(null)
+
+/** 世界书搜索与分组 */
+const loreQuery = ref('')
+/** 世界书显示哪些分类 */
+const loreFilter = ref<'all' | 'character' | 'world'>('all')
+/** 展开的条目 id（点击展开全文） */
+const loreOpen = ref<Set<string>>(new Set())
 
 /** 正在试听的段 index（-1 = 无） */
 const playingSeg = ref(-1)
@@ -72,6 +81,7 @@ async function load(): Promise<void> {
     page.value = r.page ?? null
     voices.value = r.voices ?? []
     music.value = r.music ?? null
+    lorebook.value = r.lorebook ?? null
     // 初始化音色草稿
     const d: Record<string, { vt: string; vi: string }> = {}
     for (const v of voices.value) d[v.characterId] = { vt: v.vt, vi: v.vi }
@@ -255,9 +265,38 @@ function typeLabel(t: string): string {
   return '旁白'
 }
 
-/** 句号结尾的段显示省略号（截图里长文本会截断） */
+/** 长文本截断 */
 function shorten(s: string, n = 60): string {
   return s.length > n ? s.slice(0, n) + '…' : s
+}
+
+// ---- 世界书 ----
+/** 按搜索词与分类过滤后的条目 */
+const loreFiltered = computed<MangaLoreEntry[]>(() => {
+  const all = lorebook.value?.entries ?? []
+  const q = loreQuery.value.trim().toLowerCase()
+  return all.filter((e) => {
+    if (loreFilter.value !== 'all' && e.kind !== loreFilter.value) return false
+    if (!q) return true
+    return (
+      e.name.toLowerCase().includes(q) ||
+      e.aliases.some((a) => a.toLowerCase().includes(q)) ||
+      e.content.toLowerCase().includes(q)
+    )
+  })
+})
+
+function toggleLore(id: string): void {
+  const s = new Set(loreOpen.value)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
+  loreOpen.value = s
+}
+
+/** 条目正文首行摘要（折叠时显示） */
+function loreSummary(e: MangaLoreEntry): string {
+  const firstLine = e.content.split('\n').map((s) => s.trim()).filter(Boolean)[0] ?? ''
+  return shorten(firstLine, 78)
 }
 </script>
 
@@ -501,9 +540,94 @@ function shorten(s: string, n = 60): string {
           </div>
         </section>
 
+        <!-- ===== ④ 世界书 ===== -->
+        <section class="mp-card" data-testid="mp-lore">
+          <div class="mp-card-head">
+            <div class="mp-card-title">
+              <span class="mp-ico">📖</span>
+              <b>世界书</b>
+              <span class="mp-meta">
+                人物档案与世界观 · {{ lorebook?.stats.characterCount ?? 0 }} 人
+                · {{ lorebook?.stats.withAliases ?? 0 }} 人有别名
+                · {{ lorebook?.stats.withVoice ?? 0 }} 人有音色
+              </span>
+            </div>
+            <div class="mp-card-actions">
+              <input
+                v-model="loreQuery"
+                class="mp-lore-search"
+                type="search"
+                placeholder="搜索人物 / 别名 / 正文"
+                data-testid="mp-lore-search"
+              />
+            </div>
+          </div>
+
+          <div v-if="lorebook?.warning" class="mp-err" data-testid="mp-lore-warning">{{ lorebook.warning }}</div>
+
+          <div class="mp-lore-tabs">
+            <button :class="{ on: loreFilter === 'all' }" data-testid="mp-lore-all" @click="loreFilter = 'all'">
+              全部 {{ lorebook?.stats.totalCount ?? 0 }}
+            </button>
+            <button
+              :class="{ on: loreFilter === 'character' }"
+              data-testid="mp-lore-char"
+              @click="loreFilter = 'character'"
+            >
+              人物 {{ lorebook?.stats.characterCount ?? 0 }}
+            </button>
+            <button :class="{ on: loreFilter === 'world' }" data-testid="mp-lore-world" @click="loreFilter = 'world'">
+              设定 {{ lorebook?.stats.worldCount ?? 0 }}
+            </button>
+          </div>
+
+          <div class="mp-lore-list">
+            <div
+              v-for="e in loreFiltered"
+              :key="e.id"
+              class="mp-lore-item"
+              :class="{ open: loreOpen.has(e.id), world: e.kind === 'world' }"
+              :data-testid="`mp-lore-item-${e.id}`"
+            >
+              <button class="mp-lore-head" @click="toggleLore(e.id)">
+                <span class="mp-ico-small">{{ e.kind === 'world' ? '🌐' : '👤' }}</span>
+                <b class="mp-lore-name">{{ e.name }}</b>
+                <span v-if="e.tag && e.kind === 'character'" class="mp-lore-tag">{{ e.tag }}</span>
+                <span v-if="e.constant" class="mp-lore-const">常驻</span>
+                <span v-if="e.voiceType" class="mp-lore-voice">🎙 {{ e.voiceType }}</span>
+                <span v-if="e.aliases.length" class="mp-lore-alias">{{ e.aliases.join('、') }}</span>
+                <span v-if="e.actionCount > 0" class="mp-lore-hot" :title="`台词中出现 ${e.actionCount} 次`">
+                  {{ e.actionCount }}
+                </span>
+                <span class="mp-lore-chev">{{ loreOpen.has(e.id) ? '▾' : '▸' }}</span>
+              </button>
+
+              <!-- 折叠时只显示首行摘要，展开显示全文 -->
+              <div v-if="!loreOpen.has(e.id)" class="mp-lore-brief">{{ loreSummary(e) }}</div>
+              <template v-else>
+                <pre class="mp-lore-full">{{ e.content }}</pre>
+                <div v-if="e.identInfos.length" class="mp-lore-meta">
+                  <span class="mp-muted">身份：</span>{{ e.identInfos.join('；') }}
+                </div>
+                <div v-if="e.voiceDesc" class="mp-lore-meta">
+                  <span class="mp-muted">音色：</span>{{ e.voiceDesc }}
+                </div>
+                <div v-if="e.lifeStatus" class="mp-lore-meta">
+                  <span class="mp-muted">状态：</span>{{ e.lifeStatus }}
+                </div>
+                <div v-if="e.keys.length" class="mp-lore-meta">
+                  <span class="mp-muted">触发词：</span>{{ e.keys.join(' / ') }}
+                </div>
+              </template>
+            </div>
+            <div v-if="!loreFiltered.length" class="mp-empty">
+              {{ loreQuery ? '没有匹配的条目' : '本包没有世界书数据' }}
+            </div>
+          </div>
+        </section>
+
         <!-- 概览统计 -->
-        <footer v-if="overview" class="mp-foot">
-          全书 {{ overview.stats.segmentCount }} 段讲述 · 已有配音 {{ overview.stats.withClip }} 段 ·
+        <footer v-if="overview" class="mp-foot">          全书 {{ overview.stats.segmentCount }} 段讲述 · 已有配音 {{ overview.stats.withClip }} 段 ·
           {{ overview.stats.chapterWithMusic }} 章有配乐 · {{ overview.stats.voiceCount }} 个音色档案
         </footer>
       </div>
@@ -945,5 +1069,143 @@ function shorten(s: string, n = 60): string {
   font-size: 11px;
   color: var(--faint);
   padding: 4px 0 10px;
+}
+
+/* ---- 世界书 ---- */
+.mp-lore-search {
+  width: 200px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+}
+.mp-lore-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.mp-lore-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 16px 0;
+}
+.mp-lore-tabs button {
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--panel-2);
+  color: var(--muted);
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.mp-lore-tabs button:hover {
+  color: var(--text);
+}
+.mp-lore-tabs button.on {
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 600;
+  border-color: var(--accent);
+}
+.mp-lore-list {
+  padding: 10px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mp-lore-item {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.mp-lore-item.world {
+  border-left: 3px solid var(--accent);
+}
+.mp-lore-item.open {
+  background: var(--panel);
+  border-color: var(--accent);
+}
+.mp-lore-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.mp-lore-head:hover {
+  background: var(--accent-soft);
+}
+.mp-lore-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.mp-lore-tag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+.mp-lore-const {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.mp-lore-voice {
+  font-size: 10px;
+  color: var(--accent-strong);
+}
+.mp-lore-alias {
+  font-size: 10.5px;
+  color: var(--faint);
+}
+.mp-lore-hot {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(217, 151, 76, 0.18);
+  color: #b5732a;
+  font-weight: 600;
+}
+.mp-lore-chev {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--faint);
+}
+.mp-lore-brief {
+  padding: 0 12px 9px;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--faint);
+}
+.mp-lore-full {
+  margin: 0;
+  padding: 0 12px 10px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text);
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+.mp-lore-meta {
+  padding: 0 12px 6px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
 }
 </style>

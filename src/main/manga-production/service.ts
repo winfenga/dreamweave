@@ -21,6 +21,8 @@ import {
 } from './index'
 import { saveChapterMusic, saveVoiceProfile, writeRedubClips } from './write'
 import type { MusicEditInput, MusicEditResult, RedubResult, VoiceEditInput, VoiceEditResult } from './write'
+import { buildMangaLorebook } from './lorebook'
+import type { MangaLorebook } from './lorebook'
 import { readAsset } from '../workspace/assets'
 import { ttsSpeakBytes } from '../tts'
 
@@ -32,6 +34,8 @@ export interface ProductionPageResult {
   page?: PageProduction
   voices?: PageVoiceCard[]
   music?: ChapterMusicCard
+  /** 世界书（人物档案 + 世界观；漫画侧与人共读，不注入模型） */
+  lorebook?: MangaLorebook
 }
 
 /** 时长缓存（按 t2w:// URL）：同一 URL 只读一次音频头 */
@@ -98,7 +102,9 @@ export async function getProductionPage(
 
     const voices = buildPageVoices(view, pageWithDur)
     const music = buildMusicCard(manifest, chapterSeq)
-    return { ok: true, overview, page: pageWithDur, voices, music }
+    // 世界书按整本算（人物设定不随页变）；带上 view 以便按「台词里谁说得多」排序
+    const lorebook = buildMangaLorebook(manifest, '', view)
+    return { ok: true, overview, page: pageWithDur, voices, music, lorebook }
   } catch (e) {
     return { ok: false, error: `读取编排数据失败：${(e as Error).message}` }
   }

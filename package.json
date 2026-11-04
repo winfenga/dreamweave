@@ -38,7 +38,8 @@
     "verify:cards-ui": "node scripts/verify-cards-ui.mjs",
     "verify:manga-production": "node scripts/verify-manga-production.mjs",
     "verify:manga-production-ui": "node scripts/verify-manga-production-ui.mjs",
-    "verify:manga-voice": "node scripts/verify-manga-voice.mjs"
+    "verify:manga-voice": "node scripts/verify-manga-voice.mjs",
+    "verify:manga-lore": "node scripts/verify-manga-lore.mjs"
   },
   "dependencies": {},
   "devDependencies": {
