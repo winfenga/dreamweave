@@ -15,13 +15,90 @@ import type {
 import type { ImagegenTargets } from './data'
 import { probeComfyui, generateViaComfyui } from './comfyui'
 import { applyWorkflow } from './workflow'
+import { DEFAULT_SCENE_NEGATIVE_PROMPT } from '../../shared/imagegen-defaults'
 import { renderCharPrompt, renderIconPrompt, renderScenePrompt } from './prompts'
+import {
+  buildRewriteMessages,
+  parseRewriteJson,
+  ratioToSize,
+  type PromptTarget,
+  type RewriteResult
+} from './prompt-rewrite'
+import { activeProvider } from '../pipeline/providers'
+import { buildRequestBody, endpointOf } from '../pipeline/llm-client'
+import { validateBaseURL } from '../settings/store'
+import type { LlmProvider } from '../../shared/pipeline-types'
 import { readImagegenTargets } from './data'
 import { commitCharImage, commitLocationIcon, commitSceneImage } from './backfill'
 
 /** 探活（settings.comfyui.baseUrl）。 */
 export async function probeImagegen(comfy: ComfyuiSettings): Promise<ImagegenProbeResult> {
   return probeComfyui(comfy.baseUrl)
+}
+
+/**
+ * C2：调 LLM 按目标模型规范改写提示词。
+ *
+ * 复用 `effects-suggest.ts` 同一套「唯一真源配置」（`settings.llm[]` + `activeLlmId`）
+ * 与同一套请求构造（`buildRequestBody`，不含 temperature、json_object 模式）。
+ * 失败返回 `{prompt: null, error}`，**不抛错** —— 调用方回落原模板输出。
+ */
+async function rewritePrompt(
+  structured: string,
+  target: PromptTarget,
+  kind: 'char' | 'scene' | 'icon'
+): Promise<RewriteResult> {
+  const resolved = (await activeProvider('llm')) as LlmProvider | null
+  if (!resolved) return { prompt: null, negative: null, ratio: null, error: '尚未配置模型接入' }
+  if (!resolved.enabled) return { prompt: null, negative: null, ratio: null, error: '当前模型配置已被禁用' }
+  if (!resolved.baseURL.trim() || !resolved.apiKey.trim() || !resolved.model.trim()) {
+    return { prompt: null, negative: null, ratio: null, error: '模型配置的 Base URL / API Key / Model 未填完整' }
+  }
+  const check = validateBaseURL(resolved.baseURL)
+  if (!check.ok) return { prompt: null, negative: null, ratio: null, error: `Base URL 不合法：${check.reason}` }
+
+  const messages = buildRewriteMessages(structured, target, kind)
+  const reqBody = buildRequestBody(resolved, messages, { maxTokens: 4096 })
+
+  let res: globalThis.Response
+  try {
+    res = await fetch(endpointOf(resolved), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${resolved.apiKey.trim()}` },
+      body: JSON.stringify(reqBody),
+      signal: AbortSignal.timeout(90_000)
+    })
+  } catch (e) {
+    return { prompt: null, negative: null, ratio: null, error: `改写请求失败：${(e as Error).message}` }
+  }
+  if (!res.ok) {
+    let detail = ''
+    try {
+      detail = (await res.text()).slice(0, 200)
+    } catch {
+      // 忽略
+    }
+    return { prompt: null, negative: null, ratio: null, error: `改写上游返回 ${res.status}${detail ? `：${detail}` : ''}` }
+  }
+  let parsed: unknown
+  try {
+    parsed = await res.json()
+  } catch (e) {
+    return { prompt: null, negative: null, ratio: null, error: `改写响应非 JSON：${(e as Error).message}` }
+  }
+  const content = (() => {
+    if (!parsed || typeof parsed !== 'object') return ''
+    const choices = (parsed as Record<string, unknown>).choices
+    if (!Array.isArray(choices) || !choices.length) return ''
+    const msg = (choices[0] as Record<string, unknown>)?.message as Record<string, unknown> | undefined
+    const c = msg?.content
+    return typeof c === 'string' ? c : ''
+  })()
+  if (!content) return { prompt: null, negative: null, ratio: null, error: '改写响应缺少 choices[0].message.content' }
+
+  const r = parseRewriteJson(content)
+  if (!r.prompt) return { prompt: null, negative: null, ratio: null, error: '改写结果里没有 rewritten_prompt' }
+  return r
 }
 
 /** 待生成清单（纯读）。 */
@@ -107,14 +184,51 @@ export async function imagegenGenerate(
       prompt = renderIconPrompt(t, targets.context, comfy.iconPromptTemplate)
     }
 
+    // ---- 负面提示词分流 ----
+    // 人物/图标要求透明背景 → 用 negativePrompt（压制 background）
+    // 场景图要求背景充实 → 用 sceneNegativePrompt（压制"空白/透明背景"）
+    // 共用一份会让场景图把背景压没，这是旧实现的隐患。
+    let negativePrompt =
+      req.kind === 'scene'
+        ? comfy.sceneNegativePrompt ?? DEFAULT_SCENE_NEGATIVE_PROMPT
+        : comfy.negativePrompt
+
+    // ---- 提示词改写（C2，可选）----
+    // 模板输出是「小说描述 + 画风」的拼接，人类可读但不是扩散模型最优输入。
+    // 开启改写后交给 LLM 按目标模型规范重写（Qwen-Image 要 400–500 词英文观察描述，
+    // MOSS 要 tag 或自然语言，SD 系要 75 token 内标签）。
+    // 改写失败**不阻断出图**：warn 记一笔，继续用模板输出。
+    let finalPrompt = prompt
+    let width = comfy.width
+    let height = comfy.height
+    let rewriteWarning: string | undefined
+
+    if (comfy.promptRewriteEnabled === true) {
+      const target = comfy.promptRewriteTarget ?? 'qwen-image-2.1'
+      const rw = await rewritePrompt(prompt, target, req.kind)
+      if (rw.prompt) {
+        finalPrompt = rw.prompt
+        if (rw.negative) negativePrompt = rw.negative
+        if (rw.ratio) {
+          const size = ratioToSize(rw.ratio, comfy.width, comfy.height)
+          if (size) {
+            width = size.width
+            height = size.height
+          }
+        }
+      } else {
+        rewriteWarning = `提示词改写未生效，已用原模板输出（${rw.error ?? '未知原因'}）`
+      }
+    }
+
     // ---- 工作流替换 + 提交 ----
     const workflow = applyWorkflow({
       workflowJson: comfy.workflowJson,
-      prompt,
-      negative: comfy.negativePrompt,
+      prompt: finalPrompt,
+      negative: negativePrompt,
       model: comfy.model,
-      width: comfy.width,
-      height: comfy.height,
+      width,
+      height,
       steps: comfy.steps,
       cfg: comfy.cfg
     })
@@ -125,14 +239,14 @@ export async function imagegenGenerate(
       const r = resolveCharTarget(targets, req.targetId)
       if (!r) return { ok: false, error: `未知的人物形象目标：${req.targetId}` }
       const committed = await commitCharImage(root, r.charId, r.appearanceId, gen.bytes)
-      return { ok: true, entryPath: committed.entryPath }
+      return { ok: true, entryPath: committed.entryPath, ...(rewriteWarning ? { warning: rewriteWarning } : {}) }
     }
     if (req.kind === 'scene') {
       const committed = await commitSceneImage(root, req.targetId, gen.bytes)
-      return { ok: true, entryPath: committed.entryPath }
+      return { ok: true, entryPath: committed.entryPath, ...(rewriteWarning ? { warning: rewriteWarning } : {}) }
     }
     const committed = await commitLocationIcon(root, req.targetId, gen.bytes)
-    return { ok: true, entryPath: committed.entryPath }
+    return { ok: true, entryPath: committed.entryPath, ...(rewriteWarning ? { warning: rewriteWarning } : {}) }
   } catch (e) {
     return { ok: false, error: (e as Error).message }
   }

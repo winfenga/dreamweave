@@ -204,6 +204,13 @@ export interface TaskCounts {
   local: number
   running: number
   pending: number
+  /**
+   * 内容审查拦截的实例数（D3）。
+   *
+   * 与 `failed` 分开计：failed 可重试，blocked 重试无意义（同一内容换模型还是被拦）。
+   * UI 应把 blocked > 0 渲染成醒目的「需人工处理」提示，而不是普通失败红点。
+   */
+  blocked?: number
 }
 
 /** 面板里的一行 = 注册表里的一个任务（不是实例）。 */

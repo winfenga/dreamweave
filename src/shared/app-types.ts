@@ -18,8 +18,17 @@ export interface ComfyuiSettings {
   /** 采样步数 / CFG（Qwen-Image 建议 cfg 低，默认 4） */
   steps: number
   cfg: number
-  /** 负面提示词（工作流里的 {{negative}}） */
+  /** 负面提示词（工作流里的 {{negative}}）—— 人物/图标用，要求透明背景 */
   negativePrompt: string
+  /**
+   * 场景图专用负面提示词（可选，缺省用内置默认）。
+   *
+   * 为什么必须与人物分开：两者对"背景"的要求完全相反。
+   * 人物/图标要「背景透明」，所以负向里必须压制 background/scene；
+   * 场景图要「背景充实」，负向里反而要压制「空白背景/透明背景」。
+   * 共用一份会导致场景图把背景也压成空白。
+   */
+  sceneNegativePrompt?: string
   /** 人物立绘正面提示词模板（{{name}} {{aliases}} {{sex}} {{appearanceSummary}} {{visualKeywords}} {{worldImpression}} {{novelGenre}}） */
   charPromptTemplate: string
   /** 地图图标正面提示词模板（{{locationType}} {{iconStyle}} {{novelGenre}}） */
@@ -44,6 +53,15 @@ export interface ComfyuiSettings {
   sceneArtStylePreset?: 'anime' | 'custom'
   /** 自定义场景画风文本（仅在 sceneArtStylePreset === 'custom' 时生效） */
   sceneArtStyleCustom?: string
+  /**
+   * C2：是否启用 LLM 提示词改写（默认关）。
+   *
+   * 开启后，模板拼出的结构化语义会先交给 LLM 按目标模型规范改写，
+   * 再送 ComfyUI。改写失败自动回落原模板输出，不阻断出图。
+   */
+  promptRewriteEnabled?: boolean
+  /** C2：改写目标模型（决定 system 提示词与输出格式） */
+  promptRewriteTarget?: 'qwen-image-2.1' | 'moss-image' | 'generic'
   /** ComfyUI API 格式工作流 JSON 字符串（含 {{prompt}}/{{negative}} 占位） */
   workflowJson: string
 }

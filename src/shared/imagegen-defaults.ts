@@ -88,29 +88,72 @@ export function sceneArtStyleOf(preset: ArtStylePreset | undefined, custom?: str
   return ART_STYLE_SCENE_ANIME
 }
 
-/** 人物立绘正面提示词模板。占位符：{{name}} {{aliases}} {{sex}} {{appearanceSummary}} {{visualKeywords}} {{worldImpression}} {{novelGenre}} {{artStyle}} */
+/**
+ * 透明图提示词**固定句式**（Qwen-Image 2.1 官方要求，不可改写）。
+ *
+ * 来源：Qwen-Image-2.1 官方 README「Transparent Image Generation (RGBA)」：
+ *   > This is an RGBA image with transparency. <your description>.
+ *   > The image has alpha channel and the background is transparent.
+ *
+ * 为什么必须是这个句式：Qwen-Image 2.1 的 VAE 是 **64 通道 RGBA 编码器**，
+ * 原生支持透明输出，但**必须**由提示词显式声明，否则出的是普通 RGB 图。
+ * 头尾两句是触发条件，不是可选的修饰语——删掉任一句都会退回不透明输出。
+ *
+ * 实测对照（monte-cristo 工作库）：现有角色图已是 RGBA，四角 alpha=0、
+ * 透明像素 74.8%，但那是靠「浅色纯色渐变背景」+ 后处理碰巧得到的，
+ * 换模型/换工作流就会出白底。加上固定句式才是可靠路径。
+ */
+export const RGBA_PROMPT_HEAD = 'This is an RGBA image with transparency.'
+export const RGBA_PROMPT_TAIL = 'The image has alpha channel and the background is transparent.'
+
+/**
+ * 人物立绘正面提示词模板。
+ *
+ * 【结构】严格三段：
+ *   1) 官方透明图固定开头句（RGBA_PROMPT_HEAD）
+ *   2) 中段：角色事实 + 构图 + 画风
+ *   3) 官方透明图固定结尾句（RGBA_PROMPT_TAIL）
+ *
+ * 【为什么首尾必须放这两句】扩散模型对**序列首尾**的 token 注意力权重最高，
+ * 中段容易被稀释。之前把「透明背景」放在画风基座中段（第 45 行位置），
+ * 等于把最关键的输出约束放在了最弱的位置。
+ *
+ * 占位符：{{name}} {{aliases}} {{sex}} {{appearanceSummary}} {{visualKeywords}}
+ *        {{worldImpression}} {{novelGenre}} {{artStyle}}
+ */
 export const DEFAULT_CHAR_PROMPT_TEMPLATE = [
-  '为小说创作一张角色全身立绘插画，题材：{{novelGenre}}。',
+  RGBA_PROMPT_HEAD,
+  '为小说创作一张角色全身立绘，题材：{{novelGenre}}。',
   '画面主体：一位{{sex}}，名叫「{{name}}」{{aliases}}。',
   '外貌细节：{{appearanceSummary}}。',
   '造型关键词：{{visualKeywords}}。',
-  '世界观氛围：{{worldImpression}}。',
+  '时代与场景参照（仅用于统一风格，不画进背景）：{{worldImpression}}',
   '构图要求：单人全身像，站姿自然放松，完整呈现从头顶到脚部的整体形象，',
-  '人物居中、视线朝向观者；背景使用干净的浅色纯色渐变，不带任何文字、水印或杂物。',
-  '画面质量：高清细腻，线条流畅，色彩和谐统一，人物比例准确，',
-  '画风与「{{novelGenre}}」的整体视觉气质一致。',
+  '人物居中、视线朝向观者。背景完全透明，不要任何底色、渐变、场景或装饰。',
+  '画面质量：高清细腻，线条流畅，色彩和谐统一，人物比例准确，边缘干净无白边。',
   '',
-  '{{artStyle}}'
+  '{{artStyle}}',
+  '',
+  RGBA_PROMPT_TAIL
 ].join('\n')
 
-/** 地图地点图标正面提示词模板。占位符：{{locationType}} {{iconStyle}} {{novelGenre}} */
+/**
+ * 地图地点图标正面提示词模板。
+ *
+ * 图标同样需要透明背景（叠在地图底图上），故与人物模板同样采用
+ * 官方 RGBA 固定首尾句式。
+ *
+ * 占位符：{{locationType}} {{iconStyle}} {{novelGenre}}
+ */
 export const DEFAULT_ICON_PROMPT_TEMPLATE = [
+  RGBA_PROMPT_HEAD,
   '一枚地图界面用的地点类型图标，表现「{{locationType}}」。',
   '画面主体：一个能代表{{locationType}}的单一物体或剪影，居中放置并占满画面主体位置。',
-  '背景：纯色干净背景，无任何文字、水印、边框或多余装饰。',
-  '美术风格：{{iconStyle}}。',
+  '背景完全透明，不要底色、投影板或装饰底纹。',
+  '美术风格：{{iconStyle}}',
   '整体气质与「{{novelGenre}}」一致；造型高度概括、轮廓清晰、边缘整洁，',
-  '缩小到很小的尺寸时依然能一眼辨认出类别。画面中不出现任何文字。'
+  '缩小到很小的尺寸时依然能一眼辨认出类别。画面中不出现任何文字。',
+  RGBA_PROMPT_TAIL
 ].join('\n')
 
 /**
@@ -148,10 +191,32 @@ export const SCENE_TEMPLATE_HINT =
   '可用占位符：{{sceneName}} 场景名 · {{summary}} 场景概述 · {{sceneDescription}} 场景细节 · ' +
   '{{worldImpression}} 世界观概述 · {{novelGenre}} 小说题材 · {{artStyle}} 场景画风指导语。缺失的变量替换为空串。'
 
-/** 通用负面提示词（低质、水印、文字等）。 */
+/**
+ * 人物/图标通用负面提示词（**要求透明背景**的场景用）。
+ *
+ * 关键：必须显式压制 `background` / `scene` / `backdrop` / `白底` 这些词。
+ * 旧版只有「杂乱背景」——它只压制"杂乱"，没有压制"有背景"这个事实本身，
+ * 模型仍可能画一块干净的纯色底。
+ *
+ * 同时压制 `white edges` / `outline`：透明图最常见的失败是主体边缘一圈白边
+ * （模型把"白底"画在了主体轮廓上）。
+ */
 export const DEFAULT_NEGATIVE_PROMPT =
   '低质量，低分辨率，模糊，噪点，画面扭曲，比例失调，多余肢体，多余手指，肢体畸形，' +
-  '面部崩坏，画面中出现多个人物，水印，文字，签名，logo，边框，裁切不完整，杂乱背景'
+  '面部崩坏，画面中出现多个人物，水印，文字，签名，logo，边框，裁切不完整，' +
+  '背景，场景，底图，渐变色块，纯色底，白色背景，白色描边，白边，发光轮廓，阴影投射板'
+
+/**
+ * 场景图负面提示词（**需要完整背景**的场景用）。
+ *
+ * 与人物负面词**不能共用**：两者对"背景"的要求完全相反——
+ * 人物要"没有背景"，场景要"背景充实"。
+ * 共用会导致场景图把背景也压掉（旧版就有这个隐患）。
+ */
+export const DEFAULT_SCENE_NEGATIVE_PROMPT =
+  '低质量，低分辨率，模糊，噪点，画面扭曲，比例失调，人物，人体，人形，剪影人物，' +
+  '水印，文字，签名，logo，边框，裁切不完整，空白背景，透明背景，纯色底，' +
+  '拼贴，多视图，设定稿，海报排版，对话框，界面元素'
 
 /**
  * 内置标准 text2img 工作流模板（ComfyUI **API 格式** JSON 字符串）。
@@ -238,6 +303,8 @@ export function defaultComfyuiSettings(): {
   steps: number
   cfg: number
   negativePrompt: string
+  /** 场景图专用负面提示词（与人物/图标相反：要求背景充实而非透明） */
+  sceneNegativePrompt: string
   charPromptTemplate: string
   iconPromptTemplate: string
   scenePromptTemplate: string
@@ -245,6 +312,8 @@ export function defaultComfyuiSettings(): {
   charArtStyleCustom: string
   sceneArtStylePreset: 'anime' | 'custom'
   sceneArtStyleCustom: string
+  promptRewriteEnabled: boolean
+  promptRewriteTarget: 'qwen-image-2.1' | 'moss-image' | 'generic'
   workflowJson: string
 } {
   return {
@@ -255,6 +324,7 @@ export function defaultComfyuiSettings(): {
     steps: 20,
     cfg: 4,
     negativePrompt: DEFAULT_NEGATIVE_PROMPT,
+    sceneNegativePrompt: DEFAULT_SCENE_NEGATIVE_PROMPT,
     charPromptTemplate: DEFAULT_CHAR_PROMPT_TEMPLATE,
     iconPromptTemplate: DEFAULT_ICON_PROMPT_TEMPLATE,
     scenePromptTemplate: DEFAULT_SCENE_PROMPT_TEMPLATE,
@@ -262,6 +332,8 @@ export function defaultComfyuiSettings(): {
     charArtStyleCustom: '',
     sceneArtStylePreset: 'anime',
     sceneArtStyleCustom: '',
+    promptRewriteEnabled: false,
+    promptRewriteTarget: 'qwen-image-2.1',
     workflowJson: DEFAULT_WORKFLOW_JSON
   }
 }

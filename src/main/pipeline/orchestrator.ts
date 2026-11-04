@@ -143,6 +143,39 @@ export function fingerprintOf(
   )
 }
 
+/**
+ * 解析一条依赖声明对应的实例键列表（`depSatisfied` 与 `findBlockedDep` 共用）。
+ *
+ * 抽出来的理由：两处都要按同样的后缀语义（`X:i` / `X:*` / `X:next` / 全局单例）
+ * 算出「这条依赖关心哪些实例键」。各写一份必然漂移——一处改了另一处没改，
+ * 会出现「判定为未就绪但说不出是哪个 blocked」的诡异状态。
+ */
+function depKeysFor(
+  dep: string,
+  node: string,
+  allTasks: TaskDef[],
+  pkgId: string,
+  revisionId: string,
+  chunksLen: number,
+  chunkIndex: number | null
+): string[] {
+  const parsed = parseDepSuffix(dep)
+  const nodeTask = allTasks.find((t) => t.id === node)
+  if (!nodeTask) return []
+  const keys: string[] = []
+  if (parsed.suffix === 'chunk-n') {
+    keys.push(instanceKey(pkgId, revisionId, node, parsed.chunkIndex ?? 0))
+  } else if (parsed.suffix === 'next-chunk') {
+    const nextIdx = (chunkIndex ?? 0) + 1
+    if (nextIdx < chunksLen) keys.push(instanceKey(pkgId, revisionId, node, nextIdx))
+  } else if (nodeTask.global) {
+    keys.push(instanceKey(pkgId, revisionId, node, null))
+  } else {
+    for (let c = 0; c < chunksLen; c++) keys.push(instanceKey(pkgId, revisionId, node, c))
+  }
+  return keys
+}
+
 /** 判断某依赖声明是否已就绪（导出供验证脚本做边界单测）。 */
 export function depSatisfied(
   dep: string,
@@ -155,9 +188,6 @@ export function depSatisfied(
 ): boolean {
   const base = depBase(dep)
   if (VIRTUAL_STEPS.includes(base)) return true // 伴随程序步骤：不阻塞
-  // 后缀语义统一由 `dag.parseDepSuffix()` 解析（避免在此重复实现导致死分支）
-  const parsed = parseDepSuffix(dep)
-  const suffix = parsed.suffix
   // 解析目标节点
   const ids = new Set(allTasks.map((t) => t.id))
   let nodes: string[]
@@ -167,31 +197,40 @@ export function depSatisfied(
   if (!nodes.length) return true // 无可解析节点 → 不阻塞（注册表已校验）
 
   for (const node of nodes) {
-    const nodeTask = allTasks.find((t) => t.id === node)!
-    const keys: string[] = []
-    if (suffix === 'chunk-n') {
-      // X:<n> → X 在 chunk n 的实例
-      keys.push(instanceKey(pkgId, revisionId, node, parsed.chunkIndex ?? 0))
-    } else if (suffix === 'next-chunk') {
-      // X:next → X 的下一 chunk 实例
-      const nextIdx = (chunkIndex ?? 0) + 1
-      // 末 chunk 没有「下一 chunk」实例（nextIdx >= chunksLen）：真实工作库中末 chunk 的
-      // draft 产物存在（无 next 摘要也跑，见 recon 真实库实摘），故此处**不阻塞**——
-      // 否则末 chunk 实例会永远等待一个永不存在的实例而被判「依赖未就绪」跳过。
-      if (nextIdx < chunksLen) keys.push(instanceKey(pkgId, revisionId, node, nextIdx))
-    } else if (nodeTask.global) {
-      // 全局任务（含裸 X / X:selected）：其单例
-      keys.push(instanceKey(pkgId, revisionId, node, null))
-    } else {
-      // X:i / X:* / X:selected：要求该任务全部 chunk 实例就绪
-      for (let c = 0; c < chunksLen; c++) keys.push(instanceKey(pkgId, revisionId, node, c))
-    }
+    const keys = depKeysFor(dep, node, allTasks, pkgId, revisionId, chunksLen, chunkIndex)
     for (const k of keys) {
       const st = states[k]?.status
       if (st !== 'succeeded' && st !== 'local') return false
     }
   }
   return true
+}
+
+/**
+ * 在依赖链里找一个处于 `blocked` 状态的实例，用于给下游任务更准确的跳过原因。
+ *
+ * 只看**直接依赖**（一层）。为什么不做递归：直接依赖被标 blocked 已经足够说明问题，
+ * 递归会遍历整个上游图且收益很小——用户看到「任务 X 被审查拦截」就知道该去处理谁。
+ *
+ * @returns 被拦截的任务 id；没有则 null
+ */
+function findBlockedDep(
+  task: TaskDef,
+  states: Record<string, TaskState>,
+  allTasks: TaskDef[],
+  pkgId: string,
+  revisionId: string,
+  chunksLen: number,
+  chunkIndex: number | null
+): string | null {
+  for (const dep of task.dependsOn) {
+    const node = dep.split(':')[0]
+    const keys = depKeysFor(dep, node, allTasks, pkgId, revisionId, chunksLen, chunkIndex)
+    for (const k of keys) {
+      if (states[k]?.status === 'blocked') return node
+    }
+  }
+  return null
 }
 
 /** 启动一次解析（'all' 或指定任务子集；幂等：已 succeeded 的实例直接跳过）。 */
@@ -396,6 +435,16 @@ async function runInstance(
     depSatisfied(dep, state.states, allTasks, pkgId, revisionId, deps.chunksLen, chunkIndex)
   )
   if (!ready) {
+    // 区分「等前序任务」与「前序任务被审查拦截」——后者不会自己好起来，
+    // 提示用户去处理而不是傻等，这是拦截机制的另一半价值。
+    const blockedDep = findBlockedDep(task, state.states, allTasks, pkgId, revisionId, deps.chunksLen, chunkIndex)
+    if (blockedDep) {
+      await setState({
+        status: 'skipped',
+        error: `依赖任务被内容审查拦截（${blockedDep}），本任务不会继续。请处理该任务后重新运行。`
+      })
+      return
+    }
     await setState({ status: 'skipped', error: '依赖未就绪，跳过（等待前序任务）' })
     return
   }
@@ -456,7 +505,16 @@ async function runInstance(
     })
     await setState({ status: 'succeeded', fingerprint: fp, error: null })
   } catch (e) {
-    await setState({ status: 'failed', fingerprint: fp, error: (e as Error).message })
+    // 审查拦截 → 标记 blocked 而不是 failed。
+    // 语义差别：failed 会被下次运行重试（合理的，网络/上游抖动值得重试）；
+    // blocked 不该自动重试——同一段内容换哪个模型都会被拦，重试只是白烧 token，
+    // 而且会给用户「再点一次就好」的错误暗示。故单独成一种状态，UI 上醒目提示。
+    const err = e as Error & { blocked?: boolean }
+    if (err.blocked) {
+      await setState({ status: 'blocked', fingerprint: fp, error: err.message })
+      return
+    }
+    await setState({ status: 'failed', fingerprint: fp, error: err.message })
   }
 }
 
@@ -520,7 +578,17 @@ function makeRuntime(
           await appendAttempt(state.root, task.id, rec)
         }
       )
-      if (!outcome.ok) throw new Error(outcome.error ?? 'LLM 调用失败')
+      if (!outcome.ok) {
+        // 审查拦截 → 抛可识别错误，让任务层标记 blocked 而不是普通失败。
+        // 关键区别：普通失败会自动重试/换配置；blocked 必须**停下来等人处理**，
+        // 因为同一段内容换哪个模型都会被拦，自动重试只是白烧 token。
+        if (outcome.blocked) {
+          const e = new Error(outcome.error ?? '内容审查拦截') as Error & { blocked?: boolean }
+          e.blocked = true
+          throw e
+        }
+        throw new Error(outcome.error ?? 'LLM 调用失败')
+      }
       return {
         content: outcome.content ?? '',
         providerId: outcome.providerId ?? '',

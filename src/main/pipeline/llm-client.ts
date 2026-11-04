@@ -54,6 +54,14 @@ export interface SingleAttemptResult {
   retryable: boolean
   /** 是否因**超时**中断（`AbortSignal.timeout`）。探活把超时视为可重试（用户口径）。 */
   timedOut?: boolean
+  /**
+   * 是否被**内容审查拦截**：上游返回 200 但内容过短（<50 字），
+   * 典型是「对不起，我不能生成……」这类拒绝语。
+   *
+   * 语义上与普通失败不同：重试多少次结果都一样，
+   * 调用方应当**立即终止该任务**而不是退避重试或换配置。
+   */
+  blocked?: boolean
   content?: string
   finishReason?: string | null
   usage?: TokenUsage | null
@@ -236,7 +244,46 @@ export async function singleChat(
       exchange
     }
   }
+
+  // ---- 审查拦截检测 ----
+  // 上游服务商（Qwen / GPT / Claude 等）在内容审查命中时会返回「一段很短的拒绝语」，
+  // 形如「对不起，我不能生成……」/「I'm sorry, but I can't help with that.」。
+  // 这类响应 HTTP 200、finish_reason 正常，**从协议层看完全成功**，
+  // 但内容是废的。若当成功处理，会让整条流水线拿到垃圾数据继续往下跑，
+  // 甚至写进产物。所以必须在最底层拦下来。
+  //
+  // 判定规则（用户指定）：**返回文本不足 50 字**即视为审查拦截。
+  //   为什么用长度而不是关键词：拒绝语的措辞千变万化（多语言、多供应商），
+  //   关键词穷举不了；而「不足 50 字」对任何一个真实任务输出来说都不可能——
+  //   JSON 产物最短也有几十个字段。这条规则简单、无漏判。
+  if (isLikelyContentBlocked(content)) {
+    return {
+      ok: false,
+      httpStatus: res.status,
+      retryable: false,
+      blocked: true,
+      ms,
+      error: `内容审查拦截：上游返回过短内容（${content.trim().length} 字符），可能是拒绝响应：${content.trim().slice(0, 120)}`,
+      exchange
+    }
+  }
+
   return { ok: true, httpStatus: res.status, retryable: false, content, finishReason, usage: parseUsage(parsed), ms, exchange }
+}
+
+/** 审查拦截的最小文本长度阈值（用户指定：不足 50 字即为拦截） */
+export const CONTENT_BLOCKED_MIN_CHARS = 50
+
+/**
+ * 判定一段返回内容是否是审查拒绝。
+ *
+ * 只用长度判定（用户指定策略）：真实任务输出（结构化 JSON）不可能短于 50 字，
+ * 而拒绝语通常只有一两句。这样既不依赖多语言关键词表，也不会误伤正常短输出。
+ *
+ * 注意：纯空白也算拦截（长度按 trim 后计算）。
+ */
+export function isLikelyContentBlocked(content: string): boolean {
+  return content.trim().length < CONTENT_BLOCKED_MIN_CHARS
 }
 
 function getChoices(parsed: unknown): unknown[] {
@@ -277,6 +324,12 @@ export interface ChatWithFallbackResult {
   usage?: TokenUsage | null
   error?: string
   httpStatus?: number
+  /**
+   * 是否因**内容审查拦截**而终止。
+   * true 时上层应把任务标为 blocked（而不是普通失败），且**不要自动重试**——
+   * 用户可能需要换模型/改写提示词/人工介入。
+   */
+  blocked?: boolean
   attempts: ChatAttemptLog[]
 }
 
@@ -328,6 +381,28 @@ export async function chatWithFallback(
           providerId: provider.id,
           model: provider.model,
           usage: r.usage ?? null,
+          attempts
+        }
+      }
+      // 审查拦截：重试多少次都是同一段拒绝语，换配置也一样（内容敏感度只增不减）
+      // → **立即终止整条链**，不走退避、不换配置，把 blocked 传给上层以便标记任务状态。
+      if (r.blocked) {
+        const blockedLog: ChatAttemptLog = {
+          providerId: provider.id,
+          model: provider.model,
+          ok: false,
+          httpStatus: r.httpStatus,
+          error: r.error ?? '内容审查拦截',
+          ms: r.ms,
+          communicationMs: r.ms,
+          usage: r.usage ?? null
+        }
+        attempts.push(blockedLog)
+        await onAttempt?.(blockedLog)
+        return {
+          ok: false,
+          blocked: true,
+          error: r.error ?? '内容审查拦截：上游返回过短内容',
           attempts
         }
       }

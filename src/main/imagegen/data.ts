@@ -137,12 +137,20 @@ export async function readImagegenTargets(root: string): Promise<ImagegenTargets
   }
 
   // ---- 上下文 ----
-  const wi = pickResult<{ worldImpression?: string; novelGenre?: string; locationIconArtStyle?: string }>(
-    results,
-    ':worldImpression'
-  )
+  // C1：`worldImpression` 里含剧情脉络（「故事从马赛港开始…到巴黎…」），
+  // 那是给人看的背景理解；绘图模型只需要**画面事实**。
+  // 新包会有独立的 `visualImpression`（纯视觉基调），优先用它；
+  // 旧包没有该字段 → 回落到 worldImpression（行为与改造前一致，不破坏存量）。
+  const wi = pickResult<{
+    worldImpression?: string
+    visualImpression?: string
+    novelGenre?: string
+    locationIconArtStyle?: string
+  }>(results, ':worldImpression')
+  const visual = (wi?.visualImpression ?? '').trim()
   const context: ImagegenContext = {
-    worldImpression: wi?.worldImpression ?? '',
+    worldImpression: visual || (wi?.worldImpression ?? ''),
+    worldImpressionRaw: wi?.worldImpression ?? '',
     novelGenre: wi?.novelGenre ?? '',
     iconStyle: wi?.locationIconArtStyle ?? '',
     charArtStyle: pickReader<{ text?: string }>(':character-art-style')?.text ?? '',

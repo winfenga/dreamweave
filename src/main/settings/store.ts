@@ -246,6 +246,10 @@ export function sanitizeSettings(raw: Partial<ModelSettings> | null | undefined)
     steps: Math.round(clamp(rawComfy.steps, 1, 100, dflt.steps)),
     cfg: clamp(rawComfy.cfg, 1, 30, dflt.cfg),
     negativePrompt: typeof rawComfy.negativePrompt === 'string' ? rawComfy.negativePrompt : dflt.negativePrompt,
+    sceneNegativePrompt:
+      typeof rawComfy.sceneNegativePrompt === 'string' && rawComfy.sceneNegativePrompt.trim()
+        ? rawComfy.sceneNegativePrompt
+        : dflt.sceneNegativePrompt,
     charPromptTemplate:
       typeof rawComfy.charPromptTemplate === 'string' && rawComfy.charPromptTemplate.trim()
         ? rawComfy.charPromptTemplate
@@ -270,6 +274,11 @@ export function sanitizeSettings(raw: Partial<ModelSettings> | null | undefined)
     })(),
     sceneArtStyleCustom:
       typeof rawComfy.sceneArtStyleCustom === 'string' ? rawComfy.sceneArtStyleCustom : dflt.sceneArtStyleCustom,
+    promptRewriteEnabled: rawComfy.promptRewriteEnabled === true,
+    promptRewriteTarget: ((): 'qwen-image-2.1' | 'moss-image' | 'generic' => {
+      const v = rawComfy.promptRewriteTarget
+      return v === 'moss-image' || v === 'generic' || v === 'qwen-image-2.1' ? v : dflt.promptRewriteTarget
+    })(),
     workflowJson:
       typeof rawComfy.workflowJson === 'string' && rawComfy.workflowJson.trim()
         ? rawComfy.workflowJson

@@ -86,7 +86,15 @@ export interface ShardRow {
 
 /** 任务状态（对应 records.tasks + 编排器状态；M0 由解包器填充最小集） */
 export interface TaskState {
-  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'local'
+  /**
+   * `blocked` = **内容审查拦截**（D3）。
+   *
+   * 与 `failed` 的区别：failed 通常是网络/上游/数据问题，值得重试；
+   * blocked 是上游模型拒绝生成（返回 200 但内容是「对不起，我不能…」这类拒绝语），
+   * 重试与换配置都无效，**必须停下来等人处理**（换模型 / 改写提示词 / 人工介入）。
+   * 依赖该任务的下游任务也不会继续跑——这是拦截机制的核心目的。
+   */
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'local' | 'blocked'
   fingerprint: string | null
   updatedAt: string
   error: string | null

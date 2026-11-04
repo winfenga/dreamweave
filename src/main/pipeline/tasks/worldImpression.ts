@@ -97,8 +97,13 @@ export const worldImpressionAdapter: LlmTaskAdapter = {
       const o = obj as Record<string, unknown>
       // 必填键：三个非空字符串（模板输出契约），缺一即兜底
       if (nonEmptyString(o.worldImpression) && nonEmptyString(o.novelGenre) && nonEmptyString(o.locationIconArtStyle)) {
+        // C1：`visualImpression` 是新增的**可选**字段（给绘图模型看的纯视觉基调）。
+        // 旧包/旧模型不会产出它 → 缺省时留空串，下游回落到 worldImpression。
+        // 不做「缺了就走 raw 兜底」——那会把已有的三个有效字段一起丢掉。
+        const visual = nonEmptyString(o.visualImpression) ? o.visualImpression.trim() : ''
         return {
           worldImpression: o.worldImpression,
+          ...(visual ? { visualImpression: visual } : {}),
           novelGenre: o.novelGenre,
           locationIconArtStyle: o.locationIconArtStyle
         }
@@ -107,6 +112,7 @@ export const worldImpressionAdapter: LlmTaskAdapter = {
     // 兜底（与 cacheWarming 的 raw 兜底同风格）：不抛崩，保留原文截断供排查
     return {
       worldImpression: null,
+      visualImpression: null,
       novelGenre: null,
       locationIconArtStyle: null,
       raw: (content ?? '').slice(0, 500)

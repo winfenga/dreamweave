@@ -40,7 +40,7 @@ export interface BuildOverviewOptions {
 
 /** 空计数（每次新建，避免共享可变对象）。 */
 function emptyCounts(): TaskCounts {
-  return { succeeded: 0, failed: 0, skipped: 0, local: 0, running: 0, pending: 0 }
+  return { succeeded: 0, failed: 0, skipped: 0, local: 0, running: 0, pending: 0, blocked: 0 }
 }
 
 /** 把一个状态计入计数（未知/脏状态直接忽略，不虚增）。 */
@@ -55,6 +55,11 @@ function bumpCounts(counts: TaskCounts, status: unknown): void {
       break
     case 'skipped':
       counts.skipped += 1
+      break
+    case 'blocked':
+      // 内容审查拦截：单独计数，让 UI 能醒目提示「需要人工处理」
+      // 而不是混进 failed 里被当成「再点一次就好」
+      counts.blocked = (counts.blocked ?? 0) + 1
       break
     case 'local':
       counts.local += 1

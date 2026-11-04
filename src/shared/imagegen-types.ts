@@ -54,8 +54,18 @@ export interface IconTarget {
 
 /** 提示词上下文（由 worldImpression 产物 + reader 画风条目汇集） */
 export interface ImagegenContext {
-  /** worldImpression 产物正文 */
+  /**
+   * 世界视觉基调（**给绘图模型用**）。
+   *
+   * C1：优先取 worldImpression 产物里新增的 `visualImpression`（纯画面事实）；
+   * 旧包没有该字段时回落原 `worldImpression` 全文（行为与改造前一致）。
+   */
   worldImpression: string
+  /**
+   * worldImpression 原文全文（含剧情脉络，给人看的那份）。
+   * 生图**不要**用它 —— 用 `worldImpression`。
+   */
+  worldImpressionRaw?: string
   /** worldImpression.novelGenre */
   novelGenre: string
   /** worldImpression.locationIconArtStyle（图标画风） */
