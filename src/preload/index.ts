@@ -42,6 +42,7 @@ import type {
   TavernSaveResult,
   TavernSettings
 } from '../shared/character-card-types'
+import type { ProductionPageResult } from '../main/manga-production/service'
 
 export type { ImportResult, ModelSettings, SpeakResult } from '../shared/app-types'
 export type { ReadingSegment, SourceReadResult } from '../shared/app-types'
@@ -222,7 +223,44 @@ const api = {
     cardId: string,
     messages: TavernMessage[],
     params: TavernParams | null
-  ): Promise<TavernSaveResult> => ipcRenderer.invoke('tavern:saveSession', cardId, messages, params)
+  ): Promise<TavernSaveResult> => ipcRenderer.invoke('tavern:saveSession', cardId, messages, params),
+
+  // —— 漫画编排（讲述与配音 / 背景配乐 / 本页音色）——
+  /** 取某一页的编排数据（段、配音状态、音色、配乐、概览） */
+  mangaProductionPage: (chapterSeq: number, pageNo: number): Promise<ProductionPageResult> =>
+    ipcRenderer.invoke('mangaProduction:page', chapterSeq, pageNo),
+  /** 保存本页音色档案（写回 :dubbing:voice:<charId>） */
+  mangaProductionSaveVoice: (input: {
+    characterId: string
+    vt: string
+    vi: string
+    isNarrator: boolean
+  }): Promise<{ ok: boolean; error?: string; created?: boolean }> =>
+    ipcRenderer.invoke('mangaProduction:saveVoice', input),
+  /**
+   * 重新配音本页：逐段 TTS 合成后一次性写回 clip。
+   * @param voiceMap characterId → 音色描述（作为 TTS 的 voice 提示）
+   */
+  mangaProductionRedub: (
+    chapterSeq: number,
+    pageNo: number,
+    voiceMap: Record<string, string>
+  ): Promise<{ ok: boolean; error?: string; updated?: number; synthesized?: number }> =>
+    ipcRenderer.invoke('mangaProduction:redub', chapterSeq, pageNo, voiceMap),
+  /** 换章级配乐（写回 mangaMusic:chapter:* 的 selection.track） */
+  mangaProductionSaveMusic: (input: {
+    chapterSeq: number
+    track: {
+      id: string
+      title: string
+      author: string
+      url: string
+      durationSec: number
+      licenseId: string
+      attribution: string
+    }
+  }): Promise<{ ok: boolean; error?: string; updated?: number }> =>
+    ipcRenderer.invoke('mangaProduction:saveMusic', input)
 }
 
 export type FeatherApi = typeof api

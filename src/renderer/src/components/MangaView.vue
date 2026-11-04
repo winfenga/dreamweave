@@ -18,6 +18,7 @@
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import MangaReader from './MangaReader.vue'
+import MangaProduction from './MangaProduction.vue'
 import type { MangaChapter, MangaPage, MangaPanel, MangaViewData } from '../../../shared/manga-types'
 
 const loading = ref(false)
@@ -44,12 +45,26 @@ const brokenImages = ref<Set<string>>(new Set())
  */
 const readerOpen = ref(false)
 
+/**
+ * 编排面板是否打开（讲述与配音 / 背景配乐 / 本页音色）。
+ * 同样是 fixed 覆盖层：编排页信息密度高，塞进三栏会挤成条。
+ */
+const productionOpen = ref(false)
+
 function openReader(): void {
   if (!data.value) return
   readerOpen.value = true
 }
 function closeReader(): void {
   readerOpen.value = false
+}
+
+/**
+ * 编排面板里改了数据（配音/音色/配乐）后，漫画视图要重新拉一次模型，
+ * 否则三栏里的时长、配乐名还是旧的。
+ */
+async function reloadAfterProduction(): Promise<void> {
+  await load()
 }
 
 const chapter = computed<MangaChapter | null>(() => data.value?.chapters[chIdx.value] ?? null)
@@ -284,6 +299,14 @@ function chapterLabel(ch: MangaChapter): string {
             </button>
             <button
               class="btn tiny"
+              data-testid="open-production"
+              title="编排本页的配音、配乐与音色"
+              @click="productionOpen = true"
+            >
+              🎛 编排
+            </button>
+            <button
+              class="btn tiny"
               :class="{ on: showFrames }"
               :title="showFrames ? '隐藏分镜框' : '显示分镜框'"
               @click="showFrames = !showFrames"
@@ -378,6 +401,15 @@ function chapterLabel(ch: MangaChapter): string {
         :start-chapter="chIdx"
         :start-page="pageIdx"
         @close="closeReader"
+      />
+
+      <!-- ===== 编排面板（覆盖层） ===== -->
+      <MangaProduction
+        v-if="productionOpen && page"
+        :chapter-seq="chapter?.chapterSeq ?? 1"
+        :page-no="page.no"
+        @close="productionOpen = false"
+        @changed="reloadAfterProduction"
       />
     </template>
   </div>

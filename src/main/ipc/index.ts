@@ -92,6 +92,15 @@ import type {
   TavernSettings
 } from '../../shared/character-card-types'
 import type { T2wManifest } from '../../shared/t2w-types'
+import {
+  getProductionPage,
+  invalidateDurations,
+  redubPage,
+  saveMusic,
+  savePageVoice
+} from '../manga-production/service'
+import type { ProductionPageResult } from '../manga-production/service'
+import type { MusicEditInput, VoiceEditInput } from '../manga-production/write'
 
 export const IPC = {
   importPackage: 't2w:import',
@@ -115,6 +124,16 @@ export const IPC = {
   tavernGenerate: 'tavern:generate',
   /** 保存对话会话 */
   tavernSaveSession: 'tavern:saveSession',
+
+  // —— 漫画编排（讲述与配音 / 背景配乐 / 本页音色）——
+  /** 取某一页的编排数据（段/配音状态/音色/配乐） */
+  mangaProductionPage: 'mangaProduction:page',
+  /** 保存本页音色档案 */
+  mangaProductionSaveVoice: 'mangaProduction:saveVoice',
+  /** 重新配音本页（TTS → 写回） */
+  mangaProductionRedub: 'mangaProduction:redub',
+  /** 换章级配乐 */
+  mangaProductionSaveMusic: 'mangaProduction:saveMusic',
 
   settingsGet: 'settings:get',
   settingsSave: 'settings:save',
@@ -528,6 +547,60 @@ export function registerIpc(): void {
       // 用当前选中的 LLM 配置（与流水线同一套 provider 设置，不另起一套）
       const provider = await activeProvider('llm')
       return await tavernGenerate(cur.manifest, cur.assetBase, cur.root, req, provider as never)
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  // ===========================================================================
+  // 漫画编排（讲述与配音 / 背景配乐 / 本页音色）
+  // ===========================================================================
+  ipcMain.handle(
+    IPC.mangaProductionPage,
+    async (_e, chapterSeq: number, pageNo: number): Promise<ProductionPageResult> => {
+      try {
+        const cur = await currentManifest()
+        if (!cur.ok) return { ok: false, error: cur.error }
+        const view = buildMangaView(cur.manifest, cur.assetBase)
+        if (!view) return { ok: false, error: EMPTY_MANGA_HINT }
+        return await getProductionPage(cur.manifest, view, cur.root, chapterSeq, pageNo)
+      } catch (e) {
+        return { ok: false, error: (e as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle(IPC.mangaProductionSaveVoice, async (_e, input: VoiceEditInput) => {
+    try {
+      const cur = await currentManifest()
+      if (!cur.ok) return { ok: false, error: cur.error }
+      return await savePageVoice(cur.root, input)
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle(
+    IPC.mangaProductionRedub,
+    async (_e, chapterSeq: number, pageNo: number, voiceMap: Record<string, string>) => {
+      try {
+        const cur = await currentManifest()
+        if (!cur.ok) return { ok: false, error: cur.error }
+        const view = buildMangaView(cur.manifest, cur.assetBase)
+        if (!view) return { ok: false, error: EMPTY_MANGA_HINT }
+        invalidateDurations()
+        return await redubPage(cur.root, view, chapterSeq, pageNo, (cid) => voiceMap?.[cid])
+      } catch (e) {
+        return { ok: false, error: (e as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle(IPC.mangaProductionSaveMusic, async (_e, input: MusicEditInput) => {
+    try {
+      const cur = await currentManifest()
+      if (!cur.ok) return { ok: false, error: cur.error }
+      return await saveMusic(cur.root, input)
     } catch (e) {
       return { ok: false, error: (e as Error).message }
     }

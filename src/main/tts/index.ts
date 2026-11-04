@@ -12,7 +12,7 @@
  */
 import { createHash } from 'node:crypto'
 import { app } from 'electron'
-import { access, mkdir, stat, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SpeakResult } from '../../shared/app-types'
 import type { TtsProvider } from '../../shared/pipeline-types'
@@ -149,4 +149,96 @@ export async function speak(text: string, opts?: { voice?: string }): Promise<Sp
   // 触摸一下 access，避免某些平台写后立即可读性竞态（不影响正确性）
   await access(file).catch(() => undefined)
   return { ok: true, cached: false, bytes: buf.length, url: `cache://tts/${key}.${ext}` }
+}
+
+/**
+ * 合成一段文本并**直接返回音频字节**（漫画配音写回用）。
+ *
+ * 与上方 `speak()` 的差别：`speak()` 是给渲染进程播放用的，只回 `cache://` URL；
+ * 而「重新配音」需要拿到字节去写进工作库资产区（内容寻址 `assets/audio/<sha>.mp3`），
+ * 所以必须有拿字节的入口。
+ *
+ * 复用同一条缓存：同一段文本 + 同一音色 + 同一模型 → 同一缓存文件，
+ * 命中缓存时直接读盘返回，不会重复请求上游（省钱也省时间）。
+ */
+export async function ttsSpeakBytes(
+  text: string,
+  opts?: { voice?: string }
+): Promise<{ ok: boolean; bytes?: Buffer; ext?: string; error?: string; cached?: boolean }> {
+  const input = (text ?? '').trim()
+  if (!input) return { ok: false, error: '文本为空，无法合成' }
+  if (input.length > MAX_TEXT) {
+    return { ok: false, error: `文本过长（${input.length} > ${MAX_TEXT} 字）` }
+  }
+
+  const provider = (await activeProvider('tts')) as TtsProvider | null
+  if (!provider) return { ok: false, error: '尚未配置配音（设置 → 配音接入）' }
+  if (!provider.enabled) return { ok: false, error: '当前选中的配音配置已被禁用' }
+
+  // 音色优先级与 speak() 一致：调用方传入 > 配置里的 voice > 'alloy'
+  const voice = (opts?.voice ?? '').trim() || (provider.voice ?? '').trim() || 'alloy'
+  const key = ttsCacheKey(input, voice, provider.model.trim())
+
+  // 缓存命中：直接读盘
+  const hit = await findCached(key)
+  if (hit) {
+    try {
+      const bytes = Buffer.from(await readFile(hit.path))
+      return { ok: true, bytes, ext: hit.path.split('.').pop() || 'mp3', cached: true }
+    } catch {
+      // 读失败就当未命中，继续请求上游
+    }
+  }
+
+  const check = validateBaseURL(provider.baseURL)
+  if (!check.ok) return { ok: false, error: `Base URL 不合法：${check.reason}` }
+
+  const endpoint = provider.baseURL.trim().replace(/\/+$/, '') + '/audio/speech'
+  let res: Response
+  try {
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${provider.apiKey.trim()}`
+      },
+      body: JSON.stringify({
+        model: provider.model.trim(),
+        input,
+        voice,
+        response_format: 'mp3'
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS)
+    })
+  } catch (e) {
+    return { ok: false, error: `TTS 请求失败：${(e as Error).message}` }
+  }
+  if (!res.ok) {
+    let detail = ''
+    try {
+      detail = (await res.text()).slice(0, 300)
+    } catch {
+      /* 忽略 */
+    }
+    return { ok: false, error: `TTS 上游返回 ${res.status}${detail ? `：${detail}` : ''}` }
+  }
+
+  const ct = res.headers.get('content-type') ?? ''
+  if (!ct.toLowerCase().startsWith('audio/')) {
+    return { ok: false, error: `TTS 上游未返回音频二进制（content-type=${ct || '空'}）` }
+  }
+  const ext = extFromContentType(ct)
+  const buf = Buffer.from(await res.arrayBuffer())
+  if (!buf.length) return { ok: false, error: 'TTS 上游返回了空音频' }
+
+  // 写缓存（下次命中）
+  try {
+    const dir = ttsCacheDir()
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, `${key}.${ext}`), buf)
+  } catch {
+    // 缓存写失败不影响返回值本身
+  }
+
+  return { ok: true, bytes: buf, ext, cached: false }
 }

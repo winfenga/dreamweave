@@ -2,9 +2,17 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      CSP 说明：
+        media-src 额外放开 `https:` —— t2w 包内的配乐**只有在线直链没有本地音频**
+        （实测 gmzz-10：music.tftgamer.com/audio/<sha>.mp3），不放开就完全无法播放。
+        边界说明：media-src 只约束 <audio>/<video> 的媒体加载，**不影响脚本执行**
+        （script-src 仍是 'self'），且播放由用户显式开启，不静默联网。
+        connect-src 仍不放宽，fetch 外部地址依旧被拦。
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self' data: t2w:; media-src 'self' t2w: cache:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' t2w: cache: ws://localhost:* http://localhost:*"
+      content="default-src 'self'; img-src 'self' data: t2w:; media-src 'self' t2w: cache: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' t2w: cache: ws://localhost:* http://localhost:*"
     />
     <title>DreamWeave · 织梦</title>
     <!-- data: 空图标：避免 dev server 对 /favicon.ico 回 404 污染 console.error 验收 -->
