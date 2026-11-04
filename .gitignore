@@ -21,3 +21,10 @@ scratch/
 
 # 临时提交信息文件
 .git-commit-msg.tmp
+
+# 图标生成中间产物
+build/_icon-*
+build/_probe*
+
+# 临时提交信息
+.commit-msg-*

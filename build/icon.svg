@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    DreamWeave（织梦）应用图标
+
+    设计语义：
+      「织」 = 中央的斜纹编织：四经四纬一上一下交错，浅深琥珀交替，模拟真实提花
+      「梦」 = 编织正中的四角星芒
+      底色沿用界面的暖米白，避免与应用内视觉割裂
+
+    为什么是编织而不是书或羽毛：
+      书太通用（每个阅读器都是书），羽毛是上游旧品牌 feather 的遗留。
+      交错编织既是名字的字面意思，也是唯一能在 16px 下仍然辨认的几何结构。
+
+    坐标系说明（这条曾经写错过，务必看）：
+      编织条带画在 **以画布中心 256,256 为原点的局部坐标**里，
+      所以外层用 translate(256,256) 把原点搬过去，再 rotate(45) 转成斜纹。
+      早先写成 rotate(45 256 256) 但条带坐标仍是 -132..132 的局部值，
+      结果整组被平移到画布外，渲染出来只剩星芒。
+
+    注意：本文件按严格 XML 解析，注释内不得出现双连字符。
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fdf9f3"/>
+      <stop offset="1" stop-color="#e6dbc9"/>
+    </linearGradient>
+
+    <linearGradient id="lit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f0b878"/>
+      <stop offset="1" stop-color="#d9974c"/>
+    </linearGradient>
+
+    <linearGradient id="drk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c4823b"/>
+      <stop offset="1" stop-color="#9c5f26"/>
+    </linearGradient>
+
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fffaf1" stop-opacity="0.95"/>
+      <stop offset="0.5" stop-color="#fffaf1" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#fffaf1" stop-opacity="0"/>
+    </radialGradient>
+
+    <clipPath id="tile">
+      <rect x="16" y="16" width="480" height="480" rx="110"/>
+    </clipPath>
+
+    <!-- 编织外廓：菱形。斜纹转 45 度后正好与它对齐 -->
+    <clipPath id="dia">
+      <path d="M256 74 L438 256 L256 438 L74 256 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- 瓦片底 -->
+  <g clip-path="url(#tile)">
+    <rect x="16" y="16" width="480" height="480" fill="url(#bg)"/>
+    <ellipse cx="256" cy="60" rx="250" ry="120" fill="#ffffff" opacity="0.55"/>
+  </g>
+
+  <!-- 编织主体 -->
+  <g clip-path="url(#dia)">
+    <g transform="translate(256 256) rotate(45)">
+      <!--
+        条带宽 46、间隔 64，四条铺在 -114..114（以中心为原点）。
+        范围上限受菱形内切圆约束：旋转 45 度后 -114..114 的正方形对角线 = 228*1.414 ≈ 322，
+        小于菱形对角线 364，四角不会捅出裁剪边界。
+      -->
+      <!-- 经线（竖） -->
+      <rect x="-114" y="-114" width="46" height="228" rx="12" fill="url(#lit)"/>
+      <rect x="-50"  y="-114" width="46" height="228" rx="12" fill="url(#drk)"/>
+      <rect x="14"   y="-114" width="46" height="228" rx="12" fill="url(#lit)"/>
+      <rect x="78"   y="-114" width="46" height="228" rx="12" fill="url(#drk)"/>
+
+      <!-- 纬线（横） -->
+      <rect x="-114" y="-114" width="228" height="46" rx="12" fill="url(#drk)"/>
+      <rect x="-114" y="-50"  width="228" height="46" rx="12" fill="url(#lit)"/>
+      <rect x="-114" y="14"   width="228" height="46" rx="12" fill="url(#drk)"/>
+      <rect x="-114" y="78"   width="228" height="46" rx="12" fill="url(#lit)"/>
+
+      <!--
+        交错点：把「经线压在纬线之上」的格子补回来，才能看出「一上一下」。
+        选 i+j 为偶数的交叉处，颜色跟随该列经线。
+      -->
+      <g>
+        <!-- 第 0 列（x=-114，浅）压在第 0、2 行 -->
+        <rect x="-114" y="-114" width="46" height="46" rx="12" fill="url(#lit)"/>
+        <rect x="-114" y="14"   width="46" height="46" rx="12" fill="url(#lit)"/>
+        <!-- 第 2 列（x=14，浅）压在第 1、3 行 -->
+        <rect x="14"   y="-50"  width="46" height="46" rx="12" fill="url(#lit)"/>
+        <rect x="14"   y="78"   width="46" height="46" rx="12" fill="url(#lit)"/>
+        <!-- 第 1 列（x=-50，深）压在第 1、3 行 -->
+        <rect x="-50"  y="-50"  width="46" height="46" rx="12" fill="url(#drk)"/>
+        <rect x="-50"  y="78"   width="46" height="46" rx="12" fill="url(#drk)"/>
+        <!-- 第 3 列（x=78，深）压在第 0、2 行 -->
+        <rect x="78"   y="-114" width="46" height="46" rx="12" fill="url(#drk)"/>
+        <rect x="78"   y="14"   width="46" height="46" rx="12" fill="url(#drk)"/>
+      </g>
+    </g>
+  </g>
+
+  <!--
+    中心：梦的星芒。
+    这里刻意**不加径向柔光底**、也不给大尺寸实心填充 —— 早先加了 glow 圆盘 + 纯白大星形，
+    结果星形边角与编织菱形轮廓重合，整体看成一个空心菱形，"星"的感觉消失（实测截图如此）。
+    现在把主星芒缩小到菱形的内切范围内，让编织的四条边露出来，
+    星形与菱形形成「内嵌」关系而不是互相吃掉。
+  -->
+  <g clip-path="url(#tile)">
+    <path
+      d="M256 196 C261 231, 274 241, 305 258 C274 275, 261 285, 256 320 C251 285, 238 275, 207 258 C238 241, 251 231, 256 196 Z"
+      fill="#fffdf8" fill-opacity="0.96"
+      stroke="#a2652a" stroke-opacity="0.5" stroke-width="6" stroke-linejoin="round"/>
+    <path
+      d="M344 152 C347 170, 355 176, 371 185 C355 194, 347 200, 344 218 C341 200, 333 194, 317 185 C333 176, 341 170, 344 152 Z"
+      fill="#fffdf8" fill-opacity="0.9"
+      stroke="#a2652a" stroke-opacity="0.4" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+
+  <!-- 瓦片描边 -->
+  <rect x="16" y="16" width="480" height="480" rx="110"
+        fill="none" stroke="#c4823b" stroke-opacity="0.3" stroke-width="3"/>
+</svg>

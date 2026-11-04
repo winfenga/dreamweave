@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    DreamWeave 图标的**小尺寸简化版**（用于 16 / 24 / 32 px）。
+
+    为什么必须另做一版：
+      完整版是「四经四纬一上一下」的提花编织，在 256px 下很好看；
+      但缩到 32px 时每根条带只剩 2~3 个像素，交错点全部糊掉，远看是一坨深斑。
+      小尺寸图标的评判标准不是「细节多少」而是「轮廓能否一眼认」，
+      所以这里只保留三样东西：
+        1) 菱形外廓（编织的剪影）
+        2) 三条粗带（让人看出是「交织」而不是「一个菱形块」）
+        3) 中心星芒（品牌记忆点）
+
+    色板与完整版一致，切换尺寸时不会有色差跳变。
+  -->
+  <defs>
+    <linearGradient id="s-lit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f0b878"/>
+      <stop offset="1" stop-color="#d9974c"/>
+    </linearGradient>
+    <linearGradient id="s-drk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c4823b"/>
+      <stop offset="1" stop-color="#9c5f26"/>
+    </linearGradient>
+    <clipPath id="s-tile">
+      <rect x="16" y="16" width="480" height="480" rx="110"/>
+    </clipPath>
+    <clipPath id="s-dia">
+      <path d="M256 62 L450 256 L256 450 L62 256 Z"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#s-tile)">
+    <rect x="16" y="16" width="480" height="480" fill="#f3ebdd"/>
+  </g>
+
+  <!-- 编织剪影：只有三横三竖、带宽加大，小尺寸下仍能看出「交错」 -->
+  <g clip-path="url(#s-dia)">
+    <g transform="translate(256 256) rotate(45)">
+      <!-- 竖带（先铺，形成底） -->
+      <rect x="-120" y="-120" width="70" height="240" rx="14" fill="url(#s-drk)"/>
+      <rect x="-10"  y="-120" width="70" height="240" rx="14" fill="url(#s-drk)"/>
+      <rect x="100"  y="-120" width="70" height="240" rx="14" fill="url(#s-drk)"/>
+
+      <!-- 横带（压上，形成交织感） -->
+      <rect x="-120" y="-120" width="240" height="70" rx="14" fill="url(#s-lit)"/>
+      <rect x="-120" y="-10"  width="240" height="70" rx="14" fill="url(#s-lit)"/>
+      <rect x="-120" y="100"  width="240" height="70" rx="14" fill="url(#s-lit)"/>
+    </g>
+  </g>
+
+  <!-- 中心星芒：小尺寸下加大加粗，保证一眼看到 -->
+  <g clip-path="url(#s-tile)">
+    <path
+      d="M256 178 C263 220, 280 233, 318 256 C280 279, 263 292, 256 334 C249 292, 232 279, 194 256 C232 233, 249 220, 256 178 Z"
+      fill="#fffdf8"
+      stroke="#8a5320" stroke-opacity="0.75" stroke-width="14" stroke-linejoin="round"/>
+  </g>
+
+  <rect x="16" y="16" width="480" height="480" rx="110"
+        fill="none" stroke="#c4823b" stroke-opacity="0.35" stroke-width="6"/>
+</svg>

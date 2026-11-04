@@ -40,12 +40,17 @@
     "verify:manga-production-ui": "node scripts/verify-manga-production-ui.mjs",
     "verify:manga-voice": "node scripts/verify-manga-voice.mjs",
     "verify:manga-lore": "node scripts/verify-manga-lore.mjs",
-    "verify:shelf": "node scripts/verify-shelf.mjs"
+    "verify:shelf": "node scripts/verify-shelf.mjs",
+    "icon": "node scripts/make-icon.mjs",
+    "pack": "npm run build && electron-builder --win portable --x64",
+    "pack:installer": "npm run build && electron-builder --win nsis --x64",
+    "verify:packaged": "node scripts/smoke-packaged.mjs"
   },
-  "dependencies": {},
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@vitejs/plugin-vue": "^5.2.1",
     "electron": "^33.2.1",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^2.3.0",
     "typescript": "^5.7.2",
     "vite": "^5.4.11",

@@ -1,0 +1,65 @@
+# electron-builder 打包配置
+#
+# 目标：Windows 单文件 exe（portable）+ 安装包（nsis）。
+#
+# 【关键约束：resources/ 必须进包】
+# 主进程的 resourcesDir() 找的是 `app.getAppPath()/resources`，
+# 里面装的是运行必需的静态资源：
+#   - pipeline/task-registry.json  33 个任务定义（解析链路的调度依据）
+#   - prompts/                     提示词模板
+#   - effects/effect-catalog.json  74 条演出特效目录
+# 少任何一样，对应的功能会在真机上直接报「目录不可用」。所以这里显式写进 files。
+#
+# 【asar 与静态资源】
+# 资源放在 asar 内即可：Electron 会 patch fs，readFileSync/existsSync 对
+# asar 内路径照常工作。不需要拆成 extraResources（那样反而要改代码里的路径）。
+
+appId: com.dreamweave.app
+productName: DreamWeave
+copyright: DreamWeave
+
+directories:
+  output: dist
+  buildResources: build
+
+# 只打编译产物与运行期静态资源；源码、脚本、测试包一律不进包
+files:
+  - out/**/*
+  - resources/**/*
+  - package.json
+  # 提示词备份目录不参与运行（是历史快照），排除以减小体积
+  - '!resources/prompts_backup_*/**'
+
+# 运行期零第三方依赖（package.json 的 dependencies 为空），
+# 因此不需要额外打包 node_modules —— 这是本项目刻意保持的形态。
+
+win:
+  # portable：单个 exe，双击即用，不写注册表、不需要安装权限
+  target:
+    - target: portable
+      arch:
+        - x64
+  # 图标由 scripts/make-icon.mjs 生成（多尺寸 ico，小尺寸用简化版 SVG）
+  icon: build/icon.ico
+  # 只跳过**代码签名**，保留图标与版本信息的写入。
+  # 注意：不能用 signAndEditExecutable: false —— 那个会把「改写 exe 资源」一并关掉，
+  # 结果是 exe 用默认 Electron 图标（本机实测过）。
+  signExecutable: false
+
+portable:
+  artifactName: DreamWeave-${version}-portable.exe
+
+# 安装包（可选，体积略大但带开始菜单项与卸载）
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  artifactName: DreamWeave-${version}-setup.exe
+
+# 保留符号说明：压缩用 maximum 会把打包时间拉长，normal 已足够
+compression: normal
+
+# 不生成 blockmap / 自动更新清单（本应用不做在线更新）
+generateUpdatesFilesForAllChannels: false
