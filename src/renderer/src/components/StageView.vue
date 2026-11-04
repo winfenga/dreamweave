@@ -330,6 +330,11 @@ async function waitForPace(a: StageAction): Promise<void> {
       paceNote.value = `${((r.durationMs ?? 0) / 1000).toFixed(1)}s`
       return
     }
+    // 被打断（暂停/换句）不是失败，也不再兜底等待 —— 由调用方看 navToken 决定是否续跑
+    if (r.reason === 'cancelled') {
+      paceNote.value = '已中断'
+      return
+    }
     paceNote.value =
       r.reason === 'autoplay-blocked' ? '自动播放被拦截，定时器兜底' : `配音失败(${r.reason})，定时器兜底`
     return sleep(durationMs())
@@ -342,10 +347,18 @@ async function waitForPace(a: StageAction): Promise<void> {
       paceNote.value = `${r.cached ? '缓存 ' : ''}${(r.durationMs / 1000).toFixed(1)}s`
       return
     }
+    if (r.reason === 'cancelled') {
+      paceNote.value = '已中断'
+      return
+    }
     if (clip) {
       const c = await audio.playClip(clip.url)
       if (c.ok) {
         paceNote.value = 'TTS 不可用，已回退配音'
+        return
+      }
+      if (c.reason === 'cancelled') {
+        paceNote.value = '已中断'
         return
       }
     }
@@ -359,13 +372,41 @@ async function waitForPace(a: StageAction): Promise<void> {
 }
 
 let autoRunning = false
+/**
+ * 自动播放循环。
+ *
+ * 设计约束（血泪，见 docs/audio-stall-investigation.md）：`autoRunning` 一旦漏复位，
+ * 后续所有「开始播放」都会因为 `if (!autoRunning)` 为假而再也起不来 ——
+ * 表现就是「暂停后再点自动播放毫无反应」。所以这里三重保险：
+ *   1. waitForPace 内部的播放会话可被 stopVoice() 主动结算（见 stageAudio.ts）
+ *   2. **每一句**都有自己的硬超时（不是整个循环的超时，否则长播放会被误杀）
+ *   3. finally 无条件复位 autoRunning
+ */
+const PACE_WATCHDOG_MS = 120_000
 async function autoLoop(): Promise<void> {
   try {
     while (playing.value) {
       const a = action.value
       if (!a) break
       const token = navToken
-      await waitForPace(a)
+      let timedOut = false
+      let timer: number | undefined
+      const guard = new Promise<void>((r) => {
+        timer = window.setTimeout(() => {
+          timedOut = true
+          r()
+        }, PACE_WATCHDOG_MS)
+      })
+      try {
+        await Promise.race([waitForPace(a), guard])
+      } finally {
+        if (timer !== undefined) window.clearTimeout(timer)
+      }
+      if (timedOut) {
+        // 节奏卡住也要能脱身：停掉声音、跳过这一句，继续往下走
+        audio.stopVoice()
+        paceNote.value = '节奏超时，已跳过'
+      }
       // 等待期间用户手动导航/点击过 → 放弃本次自动推进
       if (token !== navToken || !playing.value) return
       next()

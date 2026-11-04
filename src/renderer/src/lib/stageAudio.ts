@@ -10,6 +10,12 @@
  * 浏览器自动播放策略：Chromium 无用户手势时 play() 会抛 NotAllowedError。
  * 控制器记录 unlocked（首次点击/按键时置位），被拦截时向上返回
  * {ok:false, reason:'autoplay-blocked'}，由调用方走定时器兜底，不报错。
+ *
+ * ⚠️ 打断语义（2026-11 修复，见 docs/audio-stall-investigation.md）：
+ * `<audio>` 被 pause() 之后**不会**触发 ended，所以「只靠 ended/error/超时结算」
+ * 的 promise 会一直挂着 —— 这会让上层的节奏等待（waitForPace）永不返回，
+ * 自动播放的 autoRunning 也就复不了位，表现为「暂停后再点自动播放毫无反应」。
+ * 因此所有主动打断（stopVoice / 换句 / 暂停 / dispose）都必须显式结算会话。
  */
 import type { ModelSettings, SpeakResult } from '../../../shared/app-types'
 
@@ -17,15 +23,29 @@ export type AutoplayPolicy = ModelSettings['autoplayPolicy']
 
 export interface PlayClipResult {
   ok: boolean
-  reason?: 'autoplay-blocked' | 'load-error' | 'timeout' | 'empty'
+  reason?: 'autoplay-blocked' | 'load-error' | 'timeout' | 'empty' | 'cancelled'
   /** 实际播放时长（毫秒），仅 ok 时有值 */
   durationMs?: number
   url?: string
 }
 
 export interface SpeakOutcome extends SpeakResult {
-  reason?: 'autoplay-blocked' | 'load-error' | 'timeout'
+  reason?: 'autoplay-blocked' | 'load-error' | 'timeout' | 'cancelled'
   durationMs?: number
+}
+
+/**
+ * 一次进行中的播放会话。
+ *
+ * 为什么需要它：`<audio>` 被 `pause()` 之后是**不会**触发 `ended` 的，
+ * 于是「只靠 ended/error/超时结算」的 promise 会一直挂着 —— 这正是
+ * 自动播放里 `autoRunning` 复不了位、后续点击全部失效的根因。
+ * 因此任何主动打断（stopVoice / 换句 / 暂停 / dispose）都必须能把会话显式结算掉。
+ */
+interface PlaySession {
+  audio: HTMLAudioElement
+  /** 供 stopVoice 主动结算；重复调用无害 */
+  settle: (r: PlayClipResult) => void
 }
 
 /** 单个片段的安全上限：防止音频元数据异常导致自动播放卡死 */
@@ -40,6 +60,8 @@ export class StageAudioController {
   private voiceVolume = 0.9
   private bgmVolume = 0.35
   private disposed = false
+  /** 所有仍在等待结算的播放会话（见 PlaySession 注释） */
+  private sessions = new Set<PlaySession>()
 
   constructor(volumes?: { voice?: number; bgm?: number }) {
     if (volumes?.voice != null) this.voiceVolume = volumes.voice
@@ -82,26 +104,32 @@ export class StageAudioController {
     return a
   }
 
-  /** 播放包内配音片段（t2w:// URL），播完（或出错/超时）才 resolve */
+  /** 播放包内配音片段（t2w:// URL），播完（或出错/超时/被打断）才 resolve */
   playClip(url: string): Promise<PlayClipResult> {
     if (this.disposed || !url) return Promise.resolve({ ok: false, reason: 'empty' })
     const audio = this.nextVoice()
     audio.volume = this.voiceVolume
+    // 同一元素上的旧会话先结算掉，避免旧 promise 永远悬着
+    this.cancelSessions(audio, 'cancelled')
     return new Promise<PlayClipResult>((resolve) => {
       let settled = false
+      let session: PlaySession
       const done = (r: PlayClipResult): void => {
         if (settled) return
         settled = true
         window.clearTimeout(timer)
         audio.removeEventListener('ended', onEnded)
         audio.removeEventListener('error', onError)
+        this.sessions.delete(session)
         resolve(r)
       }
       const onEnded = (): void => done({ ok: true, durationMs: Math.round((audio.duration || 0) * 1000), url })
       const onError = (): void => done({ ok: false, reason: 'load-error', url })
+      const timer = window.setTimeout(() => done({ ok: false, reason: 'timeout', url }), MAX_CLIP_MS)
+      session = { audio, settle: done }
+      this.sessions.add(session)
       audio.addEventListener('ended', onEnded)
       audio.addEventListener('error', onError)
-      const timer = window.setTimeout(() => done({ ok: false, reason: 'timeout', url }), MAX_CLIP_MS)
       audio.src = url
       audio.currentTime = 0
       void audio.play().catch((e: unknown) => {
@@ -109,6 +137,17 @@ export class StageAudioController {
         done({ ok: false, reason: name === 'NotAllowedError' ? 'autoplay-blocked' : 'load-error', url })
       })
     })
+  }
+
+  /**
+   * 结算掉（并可选按元素过滤）所有进行中的播放会话。
+   * 纯 pause() 不触发 ended，所以必须走这里把 promise 收掉。
+   */
+  private cancelSessions(audio?: HTMLAudioElement, reason: PlayClipResult['reason'] = 'cancelled'): void {
+    for (const s of [...this.sessions]) {
+      if (audio && s.audio !== audio) continue
+      s.settle({ ok: false, reason, url: s.audio.src })
+    }
   }
 
   /** 合成并播放一段文本（主进程缓存优先）；未配置时 ok:false 且带可读错误 */
@@ -153,8 +192,11 @@ export class StageAudioController {
     return !!this.bgm && !this.bgm.paused
   }
 
-  /** 停掉当前所有语音（切句时调用，避免两句声音重叠） */
+  /** 停掉当前所有语音（切句/暂停时调用，避免两句声音重叠） */
   stopVoice(): void {
+    // 先结算会话再暂停：pause() 不会触发 ended，不先结算的话
+    // waitForPace 会一直挂着，自动播放循环就再也退不出来
+    this.cancelSessions(undefined, 'cancelled')
     for (const a of this.voicePool) {
       try {
         a.pause()
@@ -168,6 +210,7 @@ export class StageAudioController {
   dispose(): void {
     this.disposed = true
     this.stopVoice()
+    this.sessions.clear()
     if (this.bgm) {
       this.bgm.pause()
       this.bgm.src = ''
