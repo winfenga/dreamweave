@@ -30,6 +30,20 @@ export interface ComfyuiSettings {
    * 可选：旧 settings.json 无此字段时由 store 补默认。
    */
   scenePromptTemplate?: string
+  /**
+   * 人物画风预设（§5）：`anime`（默认，精致二游立绘）| `realistic`（电影质感真人）| `custom`。
+   * 可选：旧 settings.json 无此字段时按 `anime` 处理。
+   */
+  charArtStylePreset?: 'anime' | 'realistic' | 'custom'
+  /** 自定义人物画风文本（仅在 charArtStylePreset === 'custom' 时生效） */
+  charArtStyleCustom?: string
+  /**
+   * 场景画风预设（§5）：`anime`（默认，日式手绘动画背景）| `custom`。
+   * 可选：旧 settings.json 无此字段时按 `anime` 处理。
+   */
+  sceneArtStylePreset?: 'anime' | 'custom'
+  /** 自定义场景画风文本（仅在 sceneArtStylePreset === 'custom' 时生效） */
+  sceneArtStyleCustom?: string
   /** ComfyUI API 格式工作流 JSON 字符串（含 {{prompt}}/{{negative}} 占位） */
   workflowJson: string
 }

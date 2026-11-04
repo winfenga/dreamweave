@@ -79,7 +79,13 @@ export async function imagegenGenerate(
     if (req.kind === 'char') {
       const t = targets.chars.find((c) => `${c.charId}::${c.appearanceId}` === req.targetId)
       if (!t) return { ok: false, error: `未知的人物形象目标：${req.targetId}` }
-      prompt = renderCharPrompt(t, targets.context, comfy.charPromptTemplate)
+      prompt = renderCharPrompt(
+        t,
+        targets.context,
+        comfy.charPromptTemplate,
+        comfy.charArtStylePreset,
+        comfy.charArtStyleCustom
+      )
     } else if (req.kind === 'scene') {
       const t: SceneTarget | undefined = targets.scenes.find((s) => s.sceneId === req.targetId)
       if (!t) {
@@ -88,7 +94,13 @@ export async function imagegenGenerate(
       }
       // 场景图提示词：走模板（B3，来自新版 plot_scene_image_user_prompt 的本地化版本），
       // 与人物/图标共用同一负面与工作流通道。模板可被设置页覆盖。
-      prompt = renderScenePrompt(t, targets.context, comfy.scenePromptTemplate)
+      prompt = renderScenePrompt(
+        t,
+        targets.context,
+        comfy.scenePromptTemplate,
+        comfy.sceneArtStylePreset,
+        comfy.sceneArtStyleCustom
+      )
     } else {
       const t = targets.icons.find((i) => i.locationType === req.targetId)
       if (!t) return { ok: false, error: `未知的地点类型目标：${req.targetId}` }

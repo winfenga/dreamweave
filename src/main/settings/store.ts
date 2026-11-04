@@ -258,6 +258,18 @@ export function sanitizeSettings(raw: Partial<ModelSettings> | null | undefined)
       typeof rawComfy.scenePromptTemplate === 'string' && rawComfy.scenePromptTemplate.trim()
         ? rawComfy.scenePromptTemplate
         : dflt.scenePromptTemplate,
+    charArtStylePreset: ((): 'anime' | 'realistic' | 'custom' => {
+      const v = rawComfy.charArtStylePreset
+      return v === 'realistic' || v === 'custom' || v === 'anime' ? v : dflt.charArtStylePreset
+    })(),
+    charArtStyleCustom:
+      typeof rawComfy.charArtStyleCustom === 'string' ? rawComfy.charArtStyleCustom : dflt.charArtStyleCustom,
+    sceneArtStylePreset: ((): 'anime' | 'custom' => {
+      const v = rawComfy.sceneArtStylePreset
+      return v === 'custom' || v === 'anime' ? v : dflt.sceneArtStylePreset
+    })(),
+    sceneArtStyleCustom:
+      typeof rawComfy.sceneArtStyleCustom === 'string' ? rawComfy.sceneArtStyleCustom : dflt.sceneArtStyleCustom,
     workflowJson:
       typeof rawComfy.workflowJson === 'string' && rawComfy.workflowJson.trim()
         ? rawComfy.workflowJson

@@ -6,7 +6,89 @@
  * 改写成面向 Qwen-Image 的中文自然语言正面提示词（单人多角度立绘 / 单物体图标）。
  */
 
-/** 人物立绘正面提示词模板。占位符：{{name}} {{aliases}} {{sex}} {{appearanceSummary}} {{visualKeywords}} {{worldImpression}} {{novelGenre}} */
+/**
+ * 提示词**不照抄原版**：在原版 characterAppearance / worldImpression 字段基础上，
+ * 改写成面向 Qwen-Image 的中文自然语言正面提示词（单人多角度立绘 / 单物体图标）。
+ *
+ * §5 改造（2026-11-04）：新增三份**画风基座**（`ART_STYLE_*`），来自新版模板
+ * `visual_novel_art_style` / `visual_novel_art_style_realistic` / `visual_novel_scene_art_style`。
+ * 它们不是独立模板，而是作为 `{{artStyle}}` 注入到人物/场景模板里 —— 这解决了两处旧缺口：
+ *   1) `ImagegenContext.charArtStyle` 一直在采集（reader `:character-art-style`）却**从未被使用**；
+ *   2) 场景图此前完全没有画风约束，全靠模型自由发挥。
+ *
+ * 选择方式：`ComfyuiSettings.charArtStylePreset` = `anime`（默认）| `realistic` | `custom`。
+ */
+
+/**
+ * 人物画风基座：精致二次元立绘（默认）。
+ *
+ * 【为什么是压缩版】原版 `visual_novel_art_style` 是 1392 字符的**画法规范书**
+ * （线条粗细、阴影形状、发束节奏、材质反射…）。那些是给「会画画的助手」看的，
+ * 对 Qwen-Image / MOSS 这类扩散模型基本无效——它们只按语义 token 出图，
+ * 不理解「线稿有粗细变化」该怎么执行。实测整条提示词 1859 字符里 75% 是画风，
+ * 真正的角色描述只有 300 字，注意力被严重稀释。
+ *
+ * 【压缩原则】只保留扩散模型**真正响应**的三类信息：
+ *   1) 画风定位（赛璐璐 / 厚涂 / 真人）——决定整体质感
+ *   2) 质量词（best quality 类）——稳定出图下限
+ *   3) 禁则（不要什么）——负向约束比正向画法更有效
+ * 删掉全部「怎么画」的过程描述。
+ *
+ * 原版的「资料边界」段保留：它管的是**内容忠实度**（原文说朴素就别画华服），
+ * 这条对扩散模型有效，不能删。
+ */
+export const ART_STYLE_CHAR_ANIME =
+  '精致二次元角色立绘，日式赛璐璐风格，商业游戏美术水准，线条干净，色块分明，五官刻画精细。' +
+  '原作设定优先：原文写朴素、普通、破旧的衣着就保持原貌，不擅自改成华服；' +
+  '同一人物各形象保持共有的面部与体型特征。' +
+  '全身像，人物完整不裁切，姿态自然，双手清晰可见。' +
+  '透明背景，无背景场景、无文字、无水印、无边框。' +
+  '不要照片质感、不要三维渲染、不要草稿线条、不要塑料感、不要过曝、不要大面积渐变、不要白色描边或发光效果。'
+
+/**
+ * 人物画风基座：电影质感真人（可选）。
+ *
+ * 压缩逻辑同 anime 版。注意它与 anime 版**互斥**：
+ * 原版明确写「不采用动漫大眼/赛璐璐色块」，两者叠加会打架，由设置项二选一。
+ */
+export const ART_STYLE_CHAR_REALISTIC =
+  '真人写实电影质感角色立绘，如同高质量人像摄影，自然人体比例，真实面部结构，细腻皮肤纹理，柔和可信的光影。' +
+  '原作设定优先：原文写朴素、普通、破旧的衣着就保持原貌，不擅改成华服；' +
+  '同一人物各形象保持共有的面部与体型特征；奇幻或非人特征忠于原文并以可信实体材质表现。' +
+  '全身像，人物完整不裁切，姿态自然，双手清晰可见。' +
+  '透明背景，无摄影棚背景、无文字、无水印、无边框。' +
+  '不要动漫大眼、不要赛璐璐色块、不要线稿描边、不要三维建模感、不要蜡像式磨皮、不要过曝、不要塑料质感。'
+
+/**
+ * 场景画风基座（默认）。
+ *
+ * 与人物 anime 基座同源（原版明确要求「与精修赛璐璐人物协调」），
+ * 否则会出「二次元人物站在真实照片里」的割裂感。
+ * 压缩同 anime 人物版：只留画风定位、构图要点、禁则。
+ */
+export const ART_STYLE_SCENE_ANIME =
+  '日式动画背景美术，与赛璐璐人物协调，不透明水彩与水粉质感，手绘感强。' +
+  '人眼高度平视，中景或适度广景，透视可信，前中远景层次分明，空间尺度适合人物站位。' +
+  '画面中部偏上保持视觉平静，为前景人物留出叠放空间；底部约四分之一避让对话框，关键地标安排在它上方。' +
+  '不画任何人物，不预画对话框、安全区、边框、文字、水印或界面元素。' +
+  '不画成旅游照片、建筑效果图、游戏建模截图或舞台布景。'
+/** 画风基座预设标识 */
+export type ArtStylePreset = 'anime' | 'realistic' | 'custom'
+
+/** 人物画风预设 → 基座文本（custom 时由设置里的自定义文本提供，此处返回空串） */
+export function charArtStyleOf(preset: ArtStylePreset | undefined, custom?: string): string {
+  if (preset === 'custom') return (custom ?? '').trim()
+  if (preset === 'realistic') return ART_STYLE_CHAR_REALISTIC
+  return ART_STYLE_CHAR_ANIME
+}
+
+/** 场景画风预设 → 基座文本（暂无 realistic 场景基座，回落 anime） */
+export function sceneArtStyleOf(preset: ArtStylePreset | undefined, custom?: string): string {
+  if (preset === 'custom') return (custom ?? '').trim()
+  return ART_STYLE_SCENE_ANIME
+}
+
+/** 人物立绘正面提示词模板。占位符：{{name}} {{aliases}} {{sex}} {{appearanceSummary}} {{visualKeywords}} {{worldImpression}} {{novelGenre}} {{artStyle}} */
 export const DEFAULT_CHAR_PROMPT_TEMPLATE = [
   '为小说创作一张角色全身立绘插画，题材：{{novelGenre}}。',
   '画面主体：一位{{sex}}，名叫「{{name}}」{{aliases}}。',
@@ -16,7 +98,9 @@ export const DEFAULT_CHAR_PROMPT_TEMPLATE = [
   '构图要求：单人全身像，站姿自然放松，完整呈现从头顶到脚部的整体形象，',
   '人物居中、视线朝向观者；背景使用干净的浅色纯色渐变，不带任何文字、水印或杂物。',
   '画面质量：高清细腻，线条流畅，色彩和谐统一，人物比例准确，',
-  '画风与「{{novelGenre}}」的整体视觉气质一致。'
+  '画风与「{{novelGenre}}」的整体视觉气质一致。',
+  '',
+  '{{artStyle}}'
 ].join('\n')
 
 /** 地图地点图标正面提示词模板。占位符：{{locationType}} {{iconStyle}} {{novelGenre}} */
@@ -157,6 +241,10 @@ export function defaultComfyuiSettings(): {
   charPromptTemplate: string
   iconPromptTemplate: string
   scenePromptTemplate: string
+  charArtStylePreset: ArtStylePreset
+  charArtStyleCustom: string
+  sceneArtStylePreset: 'anime' | 'custom'
+  sceneArtStyleCustom: string
   workflowJson: string
 } {
   return {
@@ -170,6 +258,10 @@ export function defaultComfyuiSettings(): {
     charPromptTemplate: DEFAULT_CHAR_PROMPT_TEMPLATE,
     iconPromptTemplate: DEFAULT_ICON_PROMPT_TEMPLATE,
     scenePromptTemplate: DEFAULT_SCENE_PROMPT_TEMPLATE,
+    charArtStylePreset: 'anime',
+    charArtStyleCustom: '',
+    sceneArtStylePreset: 'anime',
+    sceneArtStyleCustom: '',
     workflowJson: DEFAULT_WORKFLOW_JSON
   }
 }
