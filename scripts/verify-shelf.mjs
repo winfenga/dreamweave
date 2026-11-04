@@ -297,6 +297,23 @@ const comfyUi = await ev(`(() => {
 check('ComfyUI 有「探测模型」按钮', comfyUi?.hasModels === true, '')
 check('ComfyUI 仍有「检测连接」', comfyUi?.hasProbe === true, '')
 
+// 生图页（ImagegenPanel）也必须两个都有 —— 用户是在那张页面发现图生不出来的。
+// 注意：本套件的起点是**书库（没打开任何书）**，生图面板根本不挂载，
+// 所以这里只做「挂了才检查」的软断言，另由 verify:imagegen 覆盖其功能。
+const igPanel = await ev(`(() => {
+  const root = document.querySelector('[data-testid="imagegen-panel"]')
+  if (!root) return { exists: false }
+  return {
+    exists: true,
+    hasProbe: !!root.querySelector('[data-testid="imagegen-probe"]'),
+    hasModels: !!root.querySelector('[data-testid="imagegen-models"]')
+  }
+})()`)
+if (igPanel?.exists) {
+  check('生图面板有「检测连接」', igPanel.hasProbe === true, '')
+  check('生图面板有「探测模型」', igPanel.hasModels === true, '')
+}
+
 // ============ ④ 截图 + 异常 ============
 mark('截图')
 await ev(`(() => {

@@ -28,6 +28,37 @@ const loading = ref(false)
 const probeState = ref('')
 const probing = ref(false)
 
+/**
+ * 出图模型探测（ComfyUI 的 ckpt_name 候选）。
+ *
+ * 这里是**生图页自己的入口**，与「设置 → 生图」里那个同名按钮打的是同一接口。
+ * 放在这里的原因很实际：用户是在这张页面发现"图生成不出来"的，
+ * 当场就能看清服务上到底装了哪些 checkpoint，不用先跳去设置页。
+ * 只做只读探测，不写配置 —— 改模型名仍然要去设置页（那是唯一真源）。
+ */
+const modelList = ref<string[]>([])
+const modelState = ref('')
+const modelsLoading = ref(false)
+
+async function probeModels(): Promise<void> {
+  modelsLoading.value = true
+  modelState.value = '探测中…'
+  modelList.value = []
+  try {
+    const res = await window.feather.imagegenModels()
+    if (res.ok && res.models?.length) {
+      modelList.value = res.models
+      modelState.value = `发现 ${res.models.length} 个模型`
+    } else {
+      modelState.value = res.error ?? '未发现任何模型'
+    }
+  } catch (e) {
+    modelState.value = (e as Error).message
+  } finally {
+    modelsLoading.value = false
+  }
+}
+
 /** 每行生成状态：targetId → {state, message} */
 type RowState = { state: 'running' | 'ok' | 'error'; message?: string }
 const rowStates = ref<Record<string, RowState>>({})
@@ -150,8 +181,18 @@ onMounted(() => void refreshTargets())
         {{ batchRunning ? `生成中 ${batchDone}/${batchTotal}…` : `批量生成全部缺图（${missingCount}）` }}
       </button>
       <button class="btn" data-testid="imagegen-probe" :disabled="probing" @click="probe">检测 ComfyUI 连接</button>
+      <button class="btn" data-testid="imagegen-models" :disabled="modelsLoading" @click="probeModels">
+        {{ modelsLoading ? '探测中…' : '探测模型' }}
+      </button>
       <button class="btn" :disabled="loading || busy" @click="refreshTargets">刷新</button>
       <span v-if="probeState" class="hint" data-testid="imagegen-probe-state">{{ probeState }}</span>
+      <span v-if="modelState" class="hint" data-testid="imagegen-models-state">{{ modelState }}</span>
+    </div>
+    <!-- 探测到的 checkpoint 候选：只读展示，改模型名仍去「设置 → 生图」 -->
+    <div v-if="modelList.length" class="ig-models" data-testid="imagegen-models-list">
+      <span class="hint">可用出图模型：</span>
+      <span v-for="m in modelList" :key="m" class="ig-model-chip">{{ m }}</span>
+      <span class="hint">（改模型名请到「设置 → 生图（ComfyUI）」）</span>
     </div>
     <div class="hint" style="margin-bottom: 8px">
       生图使用本地 ComfyUI（出图模型建议 Qwen-Image）；服务地址、提示词模板与工作流 JSON 在「设置 → 生图（ComfyUI）」配置。
@@ -256,5 +297,25 @@ onMounted(() => void refreshTargets())
 <style scoped>
 .imagegen {
   margin-top: 18px;
+}
+
+/* 探测到的 checkpoint 候选（只读展示） */
+.ig-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.ig-model-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
 }
 </style>
