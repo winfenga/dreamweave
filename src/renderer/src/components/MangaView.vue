@@ -17,6 +17,7 @@
  *   - 分镜无 rect → 不画热区，但仍在右侧台词列表里出现，可点选。
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import MangaReader from './MangaReader.vue'
 import type { MangaChapter, MangaPage, MangaPanel, MangaViewData } from '../../../shared/manga-types'
 
 const loading = ref(false)
@@ -33,6 +34,23 @@ const activePanel = ref<number | null>(null)
 const showFrames = ref(true)
 /** 图片加载失败标记（按 pageKey 记录） */
 const brokenImages = ref<Set<string>>(new Set())
+/**
+ * 沉浸式阅读器是否打开。
+ *
+ * 为什么单独做覆盖层而不是「收起两栏 + 图片撑满」：
+ * 三栏布局下图片高度受 `max-height: calc(100vh-230px)` 限制，竖版页在宽屏上
+ * 只能铺成一条窄带 —— 这正是用户反馈的「全屏只有一小部分」。
+ * 覆盖层用 `position: fixed; inset: 0` 独立铺满，不牵动三栏布局本身。
+ */
+const readerOpen = ref(false)
+
+function openReader(): void {
+  if (!data.value) return
+  readerOpen.value = true
+}
+function closeReader(): void {
+  readerOpen.value = false
+}
 
 const chapter = computed<MangaChapter | null>(() => data.value?.chapters[chIdx.value] ?? null)
 const page = computed<MangaPage | null>(() => chapter.value?.pages[pageIdx.value] ?? null)
@@ -261,6 +279,9 @@ function chapterLabel(ch: MangaChapter): string {
           <div class="stage-bar-right">
             <span v-if="page && !page.hasImage" class="stage-warn">本页无插图</span>
             <span v-if="page?.colorMode" class="stage-chip">{{ page.colorMode === 'monochrome' ? '黑白' : page.colorMode }}</span>
+            <button class="btn tiny" data-testid="open-reader" title="沉浸全屏阅读（一页 / 一格）" @click="openReader">
+              ⛶ 沉浸阅读
+            </button>
             <button
               class="btn tiny"
               :class="{ on: showFrames }"
@@ -349,6 +370,15 @@ function chapterLabel(ch: MangaChapter): string {
           <div v-if="!(page?.panels ?? []).length" class="side-empty">本页没有分镜数据</div>
         </div>
       </aside>
+
+      <!-- ===== 沉浸式阅读器（覆盖层，position:fixed 脱离三栏网格） ===== -->
+      <MangaReader
+        v-if="readerOpen && data"
+        :data="data"
+        :start-chapter="chIdx"
+        :start-page="pageIdx"
+        @close="closeReader"
+      />
     </template>
   </div>
 </template>
