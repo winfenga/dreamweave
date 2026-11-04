@@ -83,6 +83,35 @@ export function speakerName(lookups: ViewLookups, action: StageAction | null): s
   return lookups.characterById.get(action.characterId)?.name ?? action.characterId
 }
 
+/**
+ * 构造特效系统的立绘来源（A1）。
+ *
+ * `cutin`（人物斜切入场）与 `actor`（人物本体演出）需要「切谁」的信息，
+ * 这里把 `ViewLookups` 适配成 `ActorSource` —— 渲染层与 shared 契约之间的唯一桥。
+ *
+ * 行为：
+ *   - 指定了 characterId 且该角色有立绘 → 用它；
+ *   - 指定了 characterId 但**没有立绘** → 返回 null（不静默换成别人，否则会切错人）；
+ *   - 未指定 characterId → 回落当前句说话人的立绘（与加 characterId 之前完全一致）。
+ *
+ * `contentBox` 暂不提供（需要真实解码图片才能测量不透明边界）；handler 会
+ * 退化为「按 cropRatio 从顶部裁」，视觉上仍是可用的上半身特写。
+ */
+export function buildActorSource(
+  lookups: ViewLookups,
+  currentAction: () => StageAction | null
+): { resolve(characterId?: string): { characterId: string; imageUrl: string } | null } {
+  return {
+    resolve(characterId?: string): { characterId: string; imageUrl: string } | null {
+      const want = characterId || currentAction()?.characterId || ''
+      if (!want) return null
+      const imageUrl = lookups.characterImageById.get(want)
+      if (!imageUrl) return null
+      return { characterId: want, imageUrl }
+    }
+  }
+}
+
 /** 场景显示名 */
 export function sceneName(lookups: ViewLookups, action: StageAction | null): string {
   if (!action?.locationId) return ''

@@ -1997,6 +1997,193 @@ textarea:focus-visible {
   100% { opacity: 0; }
 }
 
+/* ---------- cutin：人物斜切入场（A1 新增） ----------
+   斜切分镜放在画面右侧偏上，从右侧滑入并轻微旋转；内层用 background 裁出上半身
+   （裁切比例由 handler 按 cropRatio 算出 background-size，这里只管定位与外框）。 */
+.fx-cutin {
+  position: absolute;
+  right: -2%;
+  top: 8%;
+  overflow: hidden;
+  transform-origin: 100% 0;
+  border-radius: 3px;
+  box-shadow: 0 10px 32px rgba(20, 14, 8, 0.45), 0 0 0 2px rgba(251, 247, 240, 0.5);
+  pointer-events: none;
+  animation-name: fxCutinIn;
+  animation-timing-function: cubic-bezier(0.22, 1.2, 0.36, 1);
+  animation-fill-mode: both;
+  /* 斜切：用 clip-path 切出平行四边形，比 transform:skew 更不容易露出空白角 */
+  clip-path: polygon(7% 0, 100% 0, 93% 100%, 0 100%);
+}
+.fx-cutin-inner {
+  position: absolute;
+  inset: 0;
+}
+.fx-cutin-edge {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, rgba(217, 151, 76, 0.28) 0%, transparent 42%);
+  mix-blend-mode: screen;
+}
+@keyframes fxCutinIn {
+  0% {
+    opacity: 0;
+    transform: translateX(42%) rotate(var(--fx-cutin-angle, -7deg)) scale(0.94);
+  }
+  18% {
+    opacity: 1;
+    transform: translateX(-3%) rotate(var(--fx-cutin-angle, -7deg)) scale(1);
+  }
+  28% {
+    transform: translateX(0) rotate(var(--fx-cutin-angle, -7deg)) scale(1);
+  }
+  82% {
+    opacity: 1;
+    transform: translateX(0) rotate(var(--fx-cutin-angle, -7deg)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(10%) rotate(var(--fx-cutin-angle, -7deg)) scale(1);
+  }
+}
+
+/* ---------- actor：人物本体演出（A1 新增） ----------
+   副本节点默认铺满舞台高度，居中显示；各 variant 只覆盖动画，不改定位。 */
+.fx-actor {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  height: 74%;
+  width: 34%;
+  margin-left: -17%;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: contain;
+  pointer-events: none;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+/* 滑入：从画面左侧外进入 */
+.fx-actor--enter {
+  animation-name: fxActorEnter;
+  animation-timing-function: cubic-bezier(0.22, 1.15, 0.36, 1);
+}
+@keyframes fxActorEnter {
+  0% {
+    opacity: 0;
+    transform: translateX(calc(-60% * var(--fx-actor-strength, 1)));
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 退场：向右滑出并淡出 */
+.fx-actor--exit {
+  animation-name: fxActorExit;
+  animation-fill-mode: forwards;
+}
+@keyframes fxActorExit {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(calc(60% * var(--fx-actor-strength, 1)));
+  }
+}
+
+/* 跳动：两次轻微上跳 */
+.fx-actor--bounce {
+  animation-name: fxActorBounce;
+  animation-iteration-count: 2;
+}
+@keyframes fxActorBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(calc(-4% * var(--fx-actor-strength, 1)));
+  }
+  65% {
+    transform: translateY(calc(-1.5% * var(--fx-actor-strength, 1)));
+  }
+}
+
+/* 发抖：高频小幅抖动 */
+.fx-actor--tremble {
+  animation-name: fxActorTremble;
+  animation-iteration-count: infinite;
+  animation-duration: 120ms;
+  animation-timing-function: linear;
+}
+@keyframes fxActorTremble {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(calc(0.5% * var(--fx-actor-strength, 1)), 0);
+  }
+  50% {
+    transform: translate(0, calc(-0.4% * var(--fx-actor-strength, 1)));
+  }
+  75% {
+    transform: translate(calc(-0.5% * var(--fx-actor-strength, 1)), 0);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+/* 倾身：整体前倾，持续保持 */
+.fx-actor--lean {
+  animation-name: fxActorLean;
+}
+@keyframes fxActorLean {
+  0% {
+    transform: rotate(0) translateY(0);
+  }
+  100% {
+    transform: rotate(calc(2.4deg * var(--fx-actor-strength, 1))) translateY(calc(0.6% * var(--fx-actor-strength, 1)));
+  }
+}
+
+/* 呼吸：极缓慢的纵向起伏，循环 */
+.fx-actor--breath {
+  animation-name: fxActorBreath;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  animation-timing-function: ease-in-out;
+}
+@keyframes fxActorBreath {
+  0% {
+    transform: translateY(0) scaleY(1);
+  }
+  100% {
+    transform: translateY(calc(-0.5% * var(--fx-actor-strength, 1))) scaleY(calc(1 + 0.006 * var(--fx-actor-strength, 1)));
+  }
+}
+
+/* 虚化：半透明幽灵感，逐渐消失 */
+.fx-actor--ghost {
+  animation-name: fxActorGhost;
+  animation-fill-mode: forwards;
+}
+@keyframes fxActorGhost {
+  0% {
+    opacity: 0.9;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(calc(4px * var(--fx-actor-strength, 1)));
+  }
+}
+
 /* ---------- flash：全屏爆闪 ---------- */
 .fx-flash {
   position: absolute;

@@ -67,6 +67,14 @@ export type EffectSource = 'manual' | 'ai'
 export interface EffectMount {
   effectId: string
   source: EffectSource
+  /**
+   * 该特效绑定的角色 id（可选，A3）。
+   *
+   * `cutin`（人物斜切入场）、`actor`（人物本体演出）、`symbol` 这类特效必须知道
+   * 「作用在谁身上」才播得对。缺省时 handler 回落「当前句说话人的立绘」——
+   * 与加这个字段之前的行为**完全一致**，故存量数据（无该字段）不需要迁移。
+   */
+  characterId?: string
 }
 
 export type RangeScope = 'scene' | 'orders'
@@ -198,6 +206,48 @@ export interface TrackContext {
   action: StageAction | null
   /** 目录项（含 name/description/category，可供 handler 取默认参数） */
   entry: EffectCatalogEntry
+  /**
+   * 人物立绘通道（A1 新增，可选）。
+   *
+   * `cutin` / `actor` 这类「作用于人物本体」的 handler 需要立绘 URL 与不透明边界；
+   * 其它 handler 用不到，可忽略。渲染进程负责提供实现，缺省（老调用方/单测）时为 undefined
+   * ——handler 必须能优雅降级（只是不播，不得抛错）。
+   */
+  actors?: ActorSource
+  /**
+   * 本次挂载点绑定的人物 id（来自 `EffectMount.characterId`）。
+   * 缺省时 handler 应回落 `ctx.action?.characterId`（当前句说话人）。
+   */
+  targetCharacterId?: string
+}
+
+/**
+ * 立绘来源（A1）。
+ *
+ * 不暴露 DOM 类型，只给 handler 判断所需的元信息 + 一个可挂载的节点。
+ * 渲染进程把真实 `<img>`/`<canvas>` 包成 `FxOverlayHost` 传进来。
+ */
+export interface ActorSource {
+  /**
+   * 取某角色的立绘信息；characterId 缺省时取「当前生效立绘」。
+   * 返回 null 表示该角色没有立绘（handler 应静默跳过，不抛错）。
+   */
+  resolve(characterId?: string): ActorPortrait | null
+}
+
+/** 一个可用的立绘 */
+export interface ActorPortrait {
+  /** 角色 id（用于生成 data-* 与去重键） */
+  characterId: string
+  /** 立绘图片 URL（t2w:// 常驻地址） */
+  imageUrl: string
+  /**
+   * 立绘的不透明内容边界（相对图片高度的比例 0..1）。
+   * 人物立绘通常底部对齐、头顶有大量透明区；
+   * `cutin` 需要据此裁出「上半身」而不是整张图。
+   * 缺失（未测量）时 handler 按 cropRatio 从顶部裁。
+   */
+  contentBox?: { top: number; bottom: number }
 }
 
 /**

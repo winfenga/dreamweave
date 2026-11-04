@@ -16,6 +16,7 @@
 import type { StageAction, ViewData } from '../../../../shared/app-types'
 import type {
   EffectCatalogEntry,
+  ActorSource,
   EffectMount,
   EffectRange,
   EffectTrack,
@@ -48,6 +49,8 @@ export interface StageFxPosition {
 export interface StageEffectRuntimeOptions {
   overlayEl?: HTMLElement | null
   sceneEl?: HTMLElement | null
+  /** 立绘来源（A1）：cutin / actor 用；不提供则这两类特效静默跳过 */
+  actors?: ActorSource | null
 }
 
 interface Contribution {
@@ -136,6 +139,8 @@ interface RangeRun {
 export class StageEffectRuntime {
   private overlayEl: HTMLElement | null
   private sceneEl: HTMLElement | null
+  /** 立绘来源（A1）：cutin / actor 消费 */
+  private actors: ActorSource | null
   private readonly handlers: Map<string, TrackHandler> = buildRegistry()
   private byId = new Map<string, EffectCatalogEntry>()
   private view: ViewData | null = null
@@ -153,7 +158,13 @@ export class StageEffectRuntime {
   constructor(opts: StageEffectRuntimeOptions) {
     this.overlayEl = opts.overlayEl ?? null
     this.sceneEl = opts.sceneEl ?? null
+    this.actors = opts.actors ?? null
     this.compositor = new SceneCompositor(() => this.recomputeScene())
+  }
+
+  /** 立绘来源可后置注入（StageView 挂载后才有 lookups） */
+  setActors(actors: ActorSource | null): void {
+    this.actors = actors
   }
 
   // ---------------------------------------------------------------- 数据接入
@@ -210,7 +221,7 @@ export class StageEffectRuntime {
           console.warn(`[fx] 缺少 kind=${track.kind} 的处理器，已跳过该轨道（不影响其它特效）`)
           continue
         }
-        this.scheduleTrack(handler, track, entry, action)
+        this.scheduleTrack(handler, track, entry, action, m.characterId)
       }
     }
   }
@@ -219,7 +230,8 @@ export class StageEffectRuntime {
     handler: TrackHandler,
     track: EffectTrack,
     entry: EffectCatalogEntry,
-    action: StageAction | null
+    action: StageAction | null,
+    targetCharacterId?: string
   ): void {
     const atMs = Math.max(0, (Number(track.at) || 0) * 1000)
     const durMs = Math.max(0, (Number(track.duration) || 0) * 1000)
@@ -229,7 +241,7 @@ export class StageEffectRuntime {
     const startTimer = window.setTimeout(() => {
       this.singleTimers.delete(startTimer)
       if (this.disposed) return
-      const inst = this.startTrack(handler, track, entry, action, scopeId, PRIORITY_SINGLE)
+      const inst = this.startTrack(handler, track, entry, action, scopeId, PRIORITY_SINGLE, targetCharacterId)
       if (!inst) {
         this.singleScopes.delete(scopeId)
         this.compositor.removeScope(scopeId)
@@ -337,7 +349,8 @@ export class StageEffectRuntime {
     entry: EffectCatalogEntry,
     action: StageAction | null,
     scopeId: string,
-    priority: number
+    priority: number,
+    targetCharacterId?: string
   ): TrackInstance | null {
     const scene: SceneTarget = {
       setTransform: (part, t) => this.compositor.setTransform(scopeId, priority, part, t),
@@ -347,7 +360,10 @@ export class StageEffectRuntime {
       overlay: this.overlayEl as unknown as FxOverlayHost,
       scene,
       action,
-      entry
+      entry,
+      // A1：立绘通道。没注入时为 undefined，cutin/actor 会自己静默跳过
+      actors: this.actors ?? undefined,
+      targetCharacterId: targetCharacterId || undefined
     }
     try {
       return handler.start(track, ctx)

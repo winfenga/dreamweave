@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ModelSettings, StageAction, ViewData } from '../../../shared/app-types'
 import SearchSelect, { type SearchOption } from './SearchSelect.vue'
 import EffectLayer from './EffectLayer.vue'
-import { buildLookups, dubbingKey, speakerName } from '../lib/viewModel'
+import { buildActorSource, buildLookups, dubbingKey, speakerName } from '../lib/viewModel'
 import { Typer } from '../lib/typer'
 import { roleColor } from '../lib/stageColors'
 import { StageAudioController } from '../lib/stageAudio'
@@ -550,7 +550,9 @@ onMounted(() => {
   // P4 特效运行时：挂载后即接入（overlay=特效层容器，scene=.stage-bg 合成目标）
   fxRuntime = new StageEffectRuntime({
     overlayEl: fxLayerRef.value?.rootEl ?? null,
-    sceneEl: sceneElRef.value
+    sceneEl: sceneElRef.value,
+    // A1：立绘通道。cutin / actor 需要「切谁」，没有它这两类特效会静默跳过
+    actors: buildActorSource(lookups.value, () => action.value)
   })
   fxRuntime.setView(props.view)
   fxRuntime.onPositionChange(fxPosition())
