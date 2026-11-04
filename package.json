@@ -30,7 +30,12 @@
     "verify:txt-import": "node scripts/verify-txt-import.mjs",
     "verify:imagegen": "node scripts/verify-imagegen.mjs",
     "smoke:summary": "node --experimental-strip-types --experimental-default-type=module --no-warnings scripts/smoke-summary.mts",
-    "smoke:view": "node scripts/smoke-view.mjs"
+    "smoke:view": "node scripts/smoke-view.mjs",
+    "verify:manga-reader": "node scripts/verify-manga-reader.mjs",
+    "verify:llm-sse": "node scripts/verify-llm-sse.mjs",
+    "verify:card-export": "node scripts/verify-card-export.mjs",
+    "verify:tavern-core": "node scripts/verify-tavern-core.mjs",
+    "verify:cards-ui": "node scripts/verify-cards-ui.mjs"
   },
   "dependencies": {},
   "devDependencies": {
