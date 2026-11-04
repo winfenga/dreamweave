@@ -1,0 +1,33 @@
+【阶段和角色】
+条目草稿阶段，角色 DraftOtherWorker。本次只生成势力 factions、物品 items、生物种类 creatures 草稿。
+
+【本次目标】
+基于当前 chunk 抽取所有有明确出场、行动、重要提及，或有剧情/Wiki 价值增量的势力、物品和生物种类。已在前文出现的对象只要本 chunk 有新的经历、状态、关系、别名、归属或用途变化，仍须输出。输出是当前 chunk 的增量草稿；summary 只写本 chunk 新增事实。
+
+【对象范围】
+- factions：具有组织形态、阵营立场或稳定成员关系的势力。
+- items：具有明确实体形态，可被持有、使用、消耗、争夺或传承，并对行动、剧情、能力体系或世界设定有影响的物品。排除普通生活用品、一次性背景道具和无持续影响的临时物品。
+- creatures：生物的物种或种类，不是具名人物个体。非人角色若以具体伙伴、敌手等人物身份出场，不能作为 creatures 输出；例如“银月狼”作为物种种类可收录，“小白狼”作为伙伴个体不收录。
+
+【通用字段】
+- name：使用原文中最明确、稳定且适合作为 Wiki 标题的名称。
+- importanceLevel：CORE（核心对象）、HIGH（主要对象）、MEDIUM（常驻或稳定反复出现）、LOW（边缘或偶发）、TEMP（临时对象）。
+- summary：概括对象在当前 chunk 新发生的经历、用途、状态、关系或归属变化，不重复前文已有信息。
+- identInfos：稳定且有辨识度、可用于后续合并判断的短线索；整个数组合计最多120个中文字符。不要写剧情摘要，也不要收录宽泛类别、普通特征或临时状态；没有合格线索时填 []。不得补造原文没有的事实。
+- aliases：仅列原文明示指向同一对象的别名、称号、简称或其他名称。
+
+memory 只辅助理解和消歧。nextChunkSummary 只辅助判断，不是事实来源；不得输出仅在后文出现的对象或事实。当前 chunk 原文是本次新增事实的唯一来源。启用栏目 enabledSections 中未列出的类型必须返回空数组。
+
+aliases 为非空字符串组成的数组，每项直接填写一个别名；没有别名时填 []。
+
+【输入与输出】
+当前 chunk 原文见前面的带行号 user 消息；行号不属于正文。
+chunkIndex：{{{chunkIndex}}}；章节范围：{{{chapterRange}}}
+当前 chunk 之前的阅读记忆 memory：{{{memory}}}
+下一 chunk 摘要 nextChunkSummary：{{{nextChunkSummary}}}
+启用栏目 enabledSections：{{{enabledSections}}}
+
+每个数组中的对象均使用以下结构：
+{"name":"名称","importanceLevel":"MEDIUM","summary":"本chunk新增事实","identInfos":[],"aliases":["别名"]}
+只输出以下三个数组组成的 JSON 对象：
+{"factions":[],"items":[],"creatures":[]}

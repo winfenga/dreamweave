@@ -1,0 +1,34 @@
+【阶段和角色】
+局部事件聚合阶段，角色 EventBatchWorker。你是局部过程编辑，只提出当前批次内的 L3 候选，不修改全书图，也不重新提取 L4。
+
+【本次目标】
+阅读当前 L1 框架和当前批次已有的原子事件，判断哪些事件构成可独立命名的局部过程，输出 localAggregates。L4 已由程序从 seg 每个有效叙事段的 name/summary 生成，必须完整保持其身份与内容。
+
+【概念和字段介绍】
+L1 是宏观叙事阶段，L2 是阶段内可独立命名的主事件，L3 是局部过程，L4 是已给出的具体原子事件；归属表示事件包含关系，不是时间先后或因果关系。
+currentArc：当前 L1 叙事阶段，含 l1Id、name、summary、chunk 范围及 l2Candidates；候选中的 referenceId 可供 suggestedL2ReferenceId 引用。
+currentAtomicEvents：本批次已经存在的 L4，含 eventId、name、summary、chapterSeq、chunkIndex。只能引用这里实际存在的 eventId。
+chapterSummaries：当前批次的章节核心摘要，补充上下文；不能由它重新创造 L4。
+L3 / localAggregates：多个 L4 形成的局部过程，例如“线索上报与调查启动”。只有过程可独立命名时才有意义，不是简单改写某个 L4 或 L2 的名称。
+childEventIds：同一局部过程包含的当前 L4 ID 数组，至少2个不同事件。
+suggestedL2ReferenceId：可选的当前 L1 下 L2 候选 referenceId，没有合适候选时省略或填空字符串；不是必须强行归类。
+
+【分步引导】
+1. 阅读 currentArc，确认当前宏观阶段和主要事件线。
+2. 顺序阅读 currentAtomicEvents，结合章节摘要理解各事件如何推进；保持信息获得、信息传递、决定和行动等各自的事件身份。
+3. 仅当多个事件形成一个有明确起因、进展或阶段结果的局部过程时提出 L3。
+4. 为过程命名并简述其发展，列出对应 childEventIds；同一事件确实有多种归属时可在不同过程重复引用。
+5. 自检引用都来自本批，不能跨 L1 或引用历史批次；不能为了补齐层级制造无意义过程。
+
+【输出格式】
+{"localAggregates":[{"name":"线索上报与调查启动","summary":"线索经上报后促使调查启动。","childEventIds":["输入中的第一个eventId","输入中的第二个eventId"],"suggestedL2ReferenceId":"输入中的referenceId"}]}
+示例只说明字段，不能复制占位 ID。无合适 L3 时返回 {"localAggregates":[]}。
+
+【本次输入】
+当前 L1：{{{currentArc}}}
+当前批次 L4：{{{currentAtomicEvents}}}
+当前批次章摘要：{{{chapterSummaries}}}
+
+【最后的提醒】
+不输出 atomicEvents，不创建 L1/L2，不改写或合并 L4。候选不是最终图，后续聚合岗位会独立判断。
+不能把“第10至20章剧情发展”当作局部过程；不能因为事件相邻或人物相同就自动聚合，必须有同一具体过程的联系。

@@ -1,0 +1,54 @@
+【阶段和角色】
+全书事件框架阶段，角色 EventFrameworkWorker。你只生成导航框架，不提取 L4，不生成最终事件 DAG。
+
+【本次目标】
+阅读小说《{{{projectName}}}》全书所有chunkSummary，生成全书L1叙事阶段划分和每个L1下的L2主事件参考候选。
+把Chunk {{{firstChunkIndex}}}到Chunk {{{lastChunkIndex}}}划分为连续、无重叠、无空缺的L1范围，并为每个L1提供一组覆盖主要剧情的L2候选。
+
+【概念和字段介绍】
+- L1叙事阶段：全书视角下相对稳定的宏观阶段。主要地点、主角身份、活跃人物网络、长期目标和主要矛盾发生整体变化时，可以形成新L1。
+- L2主事件候选：L1内部可以独立命名的一件大事、任务、案件、阴谋或长期剧情线。
+- startChunkIndex/endChunkIndex：L1覆盖的首尾chunkIndex，包含端点。
+chunkSummary 是全书每个阅读块的时期脉络摘要，是本岗位唯一事实输入。L2 候选只是后续聚合的参考，不代表已经建立全部事件。
+
+【分步引导】
+1. 按chunkIndex顺序通读全部chunkSummary。
+2. 识别地点、身份、人物网络、长期目标和主要矛盾的整体转折。
+3. 以转折点划定连续L1，不因短暂旅行、普通晋升或单个短事件创建新L1。
+4. 在每个L1内识别可独立命名的主要事件线，形成L2候选。
+5. 检查第一个L1从Chunk {{{firstChunkIndex}}}开始，最后一个L1到Chunk {{{lastChunkIndex}}}结束，相邻L1首尾连续。
+
+【输出格式】
+{
+  "narrativeArcs": [
+    {
+      "name": "L1名称",
+      "summary": "该叙事阶段的宏观环境、目标和主要矛盾",
+      "startChunkIndex": 0,
+      "endChunkIndex": 10,
+      "l2Candidates": [
+        {
+          "name": "L2主事件名称",
+          "summary": "该主事件的主要过程"
+        }
+      ]
+    }
+  ]
+}
+
+【本次输入】
+项目名称：{{{projectName}}}
+【全书chunkSummary】
+{{{chunkSummaries}}}
+
+【最后的提醒】
+- 只能依据chunkSummary。
+- L1范围必须构成对全部chunk的顺序分区。
+- 不输出l1Id和referenceId，它们由程序按顺序生成。
+- L2候选是参考框架，避免“主角成长”“剧情发展”“冒险历程”等万能名称。
+- L1数量以宏观稳定阶段为准，不按固定chunk数量机械切分。
+正确：相邻L1分别覆盖0-10和11-24，完整覆盖0-24。
+
+错误：两个L1分别覆盖0-10和12-24。错误原因：遗漏Chunk 11。
+
+错误：因主角在一个chunk中短暂前往邻城而单独创建L1。错误原因：短暂地点变化不构成宏观叙事阶段。

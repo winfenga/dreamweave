@@ -1,0 +1,20 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+
+# 测试用 .t2w 包：体积大（单个 5–91MB）且属外部素材，不入库。
+# 放在 testdata/ 下本地跑测试即可；CI / 他人复现见 testdata/README.md。
+testdata/*.t2w
+
+# 应用运行时数据目录（数据跟软件走，见 src/main/index.ts C3）
+DreamWeave-data/
+StageView-data/
+
+# TypeScript 增量编译缓存
+*.tsbuildinfo
+
+# 验证脚本产出的截图与临时文件
+scratch/
+*.png.tmp

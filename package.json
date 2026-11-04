@@ -1,0 +1,39 @@
+{
+  "name": "dreamweave",
+  "version": "0.1.0",
+  "description": "DreamWeave（织梦，初代名「羽毛笔」/StageView，纯本地，个人学习自用）——导入 .t2w 包，展开为舞台演出、漫画阅读、角色卡与内置酒馆",
+  "main": "./out/main/index.js",
+  "author": "local",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "dev:isolated": "env FEATHER_USER_DATA=D:/AI/tx/feather-isolated-userdata electron-vite dev --remote-debugging-port=9222",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "verify:t2w": "node scripts/verify-t2w.mjs",
+    "verify:views": "node scripts/verify-views.mjs",
+    "verify:stage": "node scripts/verify-stage.mjs",
+    "verify:p4": "node scripts/verify-p4.mjs",
+    "verify:origin-header": "node scripts/verify-origin-header.mjs",
+    "verify:workspace": "node scripts/verify-workspace.mjs",
+    "verify:workspace-units": "node scripts/verify-workspace-units.mjs",
+    "verify:txt-import": "node scripts/verify-txt-import.mjs",
+    "verify:imagegen": "node scripts/verify-imagegen.mjs",
+    "smoke:summary": "node --experimental-strip-types --experimental-default-type=module --no-warnings scripts/smoke-summary.mts",
+    "smoke:view": "node scripts/smoke-view.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "electron": "^33.2.1",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vue": "^3.5.13",
+    "vue-tsc": "^2.1.10"
+  }
+}

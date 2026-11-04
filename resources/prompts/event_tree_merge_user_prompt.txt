@@ -1,0 +1,82 @@
+【阶段和角色】
+增量事件聚合阶段，角色 EventMergeWorker。你是事件归属编辑，只处理当前 L1 内当前批次的 L4，不输出整棵树。
+
+【本次目标】
+把小说《{{{projectName}}}》当前Event Batch的L4增量加入当前L1的Canonical事件DAG。
+只输出本批需要新建的分组，以及本批L4需要加入的已有分组；不要输出完整事件树或逐条建边操作。
+
+【概念和字段介绍】
+- L1：当前宏观叙事阶段，已经存在，不允许创建或修改。
+- L2：主事件。可以复用已有L2，也可以新建参考框架未包含的L2。
+- L3：可选局部过程。只有能独立命名并聚合多个相关L4时才创建。
+- L4：已经提取完成的原子事件，不允许修改、合并或删除。
+- newGroups：本批需要创建的L2/L3。eventIds一次列出该分组包含的当前L4。
+- appendToGroups：把当前L4加入已有L2/L3。updatedSummary仅在已有分组摘要确实需要随事件发展而更新时填写，否则省略或填null。
+- parentGroupIds：新L3所属的已有L2 ID或本次新L2的tempId。新L2由程序自动挂入当前L1，无需填写父分组。
+canonicalAggregates：当前 L1 已经存在的 L1/L2/L3，每项 eventId 是真实分组 ID。
+canonicalMemberships：已存在的归属边，parentId 指父组，childId 指子组或原子事件；不是时间先后关系。
+historicalAtomicEvents：此前批次的 L4，只供理解已有过程，不能再次加入分组。
+currentAtomicEvents：本次需要归属的 L4，eventIds 只能从这里选择。
+localAggregates：本批局部过程候选，只是建议，不是已存在的 canonical 分组。
+DAG 是有向无环的事件归属图，不能形成环，也不表示时间先后或因果关系。DAG 允许同一 L4 属于多个分组；一个新 L3 也可属于多个 L2，但所有归属都必须在当前 L1 内并遵守层级。
+
+【分步引导】
+1. 阅读当前L1、已有Canonical L2/L3、此前L4和当前L4。
+2. 优先把currentAtomicEvents加入语义匹配的已有L2/L3。
+3. 没有合适分组时才新建L2/L3；不要为了补齐层级创建无意义L3。
+4. 能判断归属的currentAtomicEvents应加入合适分组；确实没有合适L2/L3的L4可以不输出，程序会将其直接挂到当前L1，确保不遗漏。
+5. 同一个L4可以同时属于多个分组，此时把它列入多个eventIds数组。
+6. localAggregates只是当前批次的L3候选，可参考但必须独立判断。
+7. 自检 newGroups 的临时 ID 唯一，appendToGroups 指向已有分组，L3 的父级实际是 L2；不得引用不存在的 ID。
+
+【输出格式】
+{
+  "newGroups": [
+    {
+      "tempId": "NG-1",
+      "level": 3,
+      "name": "事件分组名称",
+      "summary": "覆盖该分组当前发展过程的简洁摘要",
+      "parentGroupIds": ["L2-001-001"],
+      "eventIds": ["AE-00001", "AE-00002"]
+    }
+  ],
+  "appendToGroups": [
+    {
+      "groupId": "L3-00001",
+      "eventIds": ["AE-00003"],
+      "updatedSummary": "仅在原摘要已不足以概括新增发展时填写"
+    }
+  ]
+}
+
+【本次输入】
+项目名称：{{{projectName}}}
+【当前L1】
+{{{currentArc}}}
+
+【当前L1已有Canonical L1/L2/L3】
+{{{canonicalAggregates}}}
+
+【当前L1已有DAG归属】
+{{{canonicalMemberships}}}
+
+【当前L1在本批之前的全部L4】
+{{{historicalAtomicEvents}}}
+
+【当前批次L4】
+{{{currentAtomicEvents}}}
+
+【当前批次Local L3候选】
+{{{localAggregates}}}
+
+【最后的提醒】
+- 只处理currentAtomicEvents，不把historicalAtomicEvents重复加入分组。
+- 不创建L4，不改写L4内容。
+- 模型只负责建立L2/L3分组；未被分组接收的L4由程序直接挂到L1。
+- L2可以直接包含L4，也可以包含L3；L3只能包含L4。
+- 新L3必须至少填写一个有效parentGroupIds，且只能指向L2。
+- newGroups的tempId在本次响应内唯一，格式使用NG-1、NG-2……
+- 禁止跨出当前L1建立归属。
+- 不输出解释、Markdown或代码围栏，只输出合法JSON。
+- 没有内容的数组输出[]，不要输出占位对象。

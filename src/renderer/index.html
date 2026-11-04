@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: t2w:; media-src 'self' t2w: cache:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' t2w: cache: ws://localhost:* http://localhost:*"
+    />
+    <title>DreamWeave · 织梦</title>
+    <!-- data: 空图标：避免 dev server 对 /favicon.ico 回 404 污染 console.error 验收 -->
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <!-- F5 启动动画：Vue 挂载前即渲染（纯 CSS，无 JS 依赖）；App.vue onMounted 后淡出移除 -->
+    <div id="splash">
+      <svg class="splash-feather" viewBox="0 0 24 24" width="52" height="52" aria-hidden="true">
+        <path
+          class="feather-body"
+          d="M20.5 3.5c-4.5-1.5-9.5.5-12.5 4.5-2.2 3-3 6.5-3.3 9.2l-1.4 3.1c-.1.3.2.6.5.4l2.9-1.6c2.7-.2 6.3-.9 9.3-3.1 4-3 6-8 4.5-12.5z"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linejoin="round"
+        />
+        <path class="feather-stem" d="M4.5 19.5 14 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+      </svg>
+      <div class="splash-title">DreamWeave</div>
+      <div class="splash-sub">织 梦</div>
+      <div class="splash-bar" aria-hidden="true"><i></i></div>
+    </div>
+    <style>
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: radial-gradient(1100px 640px at 50% 38%, #f7efe2 0%, #ede4d8 58%, #e5d9c6 100%);
+        color: #3a2e22;
+        transition: opacity 0.55s ease, transform 0.55s ease;
+      }
+      .splash-feather {
+        color: #b26b2a;
+        animation: splash-float 2.6s ease-in-out infinite;
+      }
+      .feather-body {
+        stroke-dasharray: 80;
+        stroke-dashoffset: 80;
+        animation: splash-draw 1.7s ease-out 0.05s forwards;
+      }
+      .feather-stem {
+        stroke-dasharray: 16;
+        stroke-dashoffset: 16;
+        animation: splash-draw 0.6s ease-out 1.5s forwards;
+      }
+      .splash-title {
+        font-size: 24px;
+        font-weight: 650;
+        letter-spacing: 0.18em;
+        text-indent: 0.18em;
+        opacity: 0;
+        animation: splash-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) 1.6s forwards;
+      }
+      .splash-sub {
+        font-size: 11px;
+        letter-spacing: 0.3em;
+        text-indent: 0.3em;
+        color: #9c8b76;
+        opacity: 0;
+        animation: splash-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) 1.85s forwards;
+      }
+      .splash-bar {
+        width: 132px;
+        height: 3px;
+        border-radius: 999px;
+        background: rgba(58, 46, 34, 0.14);
+        overflow: hidden;
+        margin-top: 14px;
+        opacity: 0;
+        animation: splash-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) 2.05s forwards;
+      }
+      .splash-bar i {
+        display: block;
+        width: 34%;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(178, 107, 42, 0.15), #b26b2a);
+        animation: splash-slide 1.15s ease-in-out infinite;
+      }
+      #splash.splash-out {
+        opacity: 0;
+        transform: scale(1.025);
+        pointer-events: none;
+      }
+      @keyframes splash-draw {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      @keyframes splash-float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-5px);
+        }
+      }
+      @keyframes splash-up {
+        from {
+          opacity: 0;
+          transform: translateY(9px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes splash-slide {
+        0% {
+          transform: translateX(-110%);
+        }
+        100% {
+          transform: translateX(420%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .splash-feather,
+        .feather-body,
+        .feather-stem,
+        .splash-title,
+        .splash-sub,
+        .splash-bar,
+        .splash-bar i {
+          animation-duration: 0.01s !important;
+          animation-iteration-count: 1 !important;
+        }
+      }
+    </style>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

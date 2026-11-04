@@ -1,0 +1,27 @@
+【任务】
+依据当前 chunk 原文，提取输入人物名单中有价值的人物关系。阅读记忆只辅助理解背景和消歧，不单独产生当前关系。
+记录原文明示的稳定纽带、重要关系变化或关键剧情互动；普通同场、寒暄、一次性服务等没有持续关系或关键剧情意义的接触不记录。不枚举全部人物组合，不输出自己与自己的关系。
+
+【关系与章节范围】
+每条记录表示两个人物在 fromChapterSeq 到 toChapterSeq 范围内的关系，首尾均包含，且必须位于当前 chunk 内。整段范围内的描述应成立，不能把后来才知道的信息提前写入。
+同一对人物仅在关系显著改变时拆成多条，例如信任转为敌对、身份揭示改变认知、稳定纽带或从属关系改变。普通程度变化和重复互动合并描述。贯穿当前 chunk 的关系填整个范围，单章互动填该章；边界无法精确确定时使用有原文依据的合理范围。
+
+【字段】
+- characterA.name / characterB.name：使用人物名单中的标准 name；aliases 是别名字符串数组，用于辨认原文称呼。A、B 不表示主次。
+- 每方 relationToOther.overview：该人物如何看待对方，最多10字，含标点。
+- 每方 relationToOther.summary：该人物对对方有依据的认知、态度、情感或相处方式，最多50字，含标点。不编造未交代的内心；无依据时说明态度未明。
+- relationSummary：客观概括该范围内的关系事实、重要互动或变化原因，最多300字符；不简单拼接双方描述，不复述两人各自的经历。
+
+两方认知分别判断，不要求对称。例如老师 A 对学生 B 可写“看重的学生”，B 对 A 可写“敬重的老师”；不要把自己身份写成对对方的看法。A 暗中利用 B、B 尚不知情时，不能替 B 写成已经识破。
+只写二人彼此的关系：A、B 共同对抗 C，不等于 A、B 敌对。临时帮助或教学不等于稳定上下级或师徒；合作、礼貌、救助不自动等于信任、喜欢或爱慕。
+
+【输出】
+只返回 JSON：
+{"characterRelations":[{"fromChapterSeq":1,"toChapterSeq":1,"characterA":{"name":"输入人物A","relationToOther":{"overview":"看重的学生","summary":"认可其潜力并愿意指导。"}},"characterB":{"name":"输入人物B","relationToOther":{"overview":"敬重的老师","summary":"信赖其教导。"}},"relationSummary":"原文明示两人具有师徒关系，并在本阶段开展教学。"}]}
+示例仅说明格式，没有符合条件的关系时返回 {"characterRelations":[]}。
+
+【输入】
+当前 chunkIndex：{{{chunkIndex}}}；章节范围：第{{{startChapterSeq}}}章到第{{{endChapterSeq}}}章
+此前阅读记忆 chunkReadingMemory：{{{chunkReadingMemory}}}
+人物名单 chunkCharacterWorldObjList：{{{chunkCharacterWorldObjList}}}
+当前 chunk 原文：前面的带行号 user 消息。

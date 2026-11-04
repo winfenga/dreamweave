@@ -1,0 +1,1442 @@
+[
+ {
+  "id": "portrait-cutin",
+  "name": "人物斜切入场",
+  "category": "镜头系统",
+  "duration": 4,
+  "description": "自动检测当前立绘的不透明顶部与底部，按有效高度比例取上半身，再完整放入斜切分镜；可轮换 80 张立绘和调节裁切比例。",
+  "sound": "无音效。",
+  "tracks": [
+   {
+    "kind": "cutin",
+    "at": 0,
+    "duration": 4,
+    "cropRatio": 0.36,
+    "panelHeight": 0.5,
+    "panelWidth": 0.61,
+    "angle": -7
+   }
+  ]
+ },
+ {
+  "id": "blink",
+  "name": "画面眨眼",
+  "category": "主观感知",
+  "duration": 2,
+  "description": "弧形眼睑快速闭合再打开。遮罩只作用于演出画面，不遮住推进按钮。",
+  "sound": "通常无需音效。",
+  "tracks": [
+   {
+    "kind": "eyelids",
+    "pattern": "blink",
+    "at": 0.3,
+    "duration": 0.7
+   }
+  ]
+ },
+ {
+  "id": "struggling-open",
+  "name": "艰难睁眼",
+  "category": "主观感知",
+  "duration": 6,
+  "description": "黑暗中尝试睁眼，眼缝开合两次后完全打开；视野从模糊恢复清晰。",
+  "sound": "建议：虚弱呼吸、环境声渐入。当前为无声演示。",
+  "tracks": [
+   {
+    "kind": "eyelids",
+    "pattern": "struggle",
+    "at": 0,
+    "duration": 5.2
+   },
+   {
+    "kind": "blur",
+    "strength": 10,
+    "at": 0,
+    "duration": 5.5
+   }
+  ]
+ },
+ {
+  "id": "push-impact",
+  "name": "推近与冲击震动",
+  "category": "镜头系统",
+  "duration": 3.5,
+  "description": "先推近，再叠加衰减震动，最后恢复构图。验证两种镜头变化不会互相覆盖。",
+  "sound": "建议：重物撞击声。当前为无声演示。",
+  "tracks": [
+   {
+    "kind": "camera",
+    "scale": 1.18,
+    "at": 0,
+    "duration": 3
+   },
+   {
+    "kind": "shake",
+    "strength": 13,
+    "at": 0.65,
+    "duration": 0.8
+   }
+  ]
+ },
+ {
+  "id": "rain",
+  "name": "有风的雨幕",
+  "category": "天气系统",
+  "duration": 7,
+  "description": "细密远景雨丝与柔焦近景雨痕随风落下，背景渐暗形成冷色雨幕；停止立即恢复。",
+  "sound": "建议：雨声循环与风声。当前为无声演示。",
+  "tracks": [
+   {
+    "kind": "particles",
+    "variant": "rain",
+    "count": 180,
+    "at": 0,
+    "duration": 7
+   }
+  ]
+ },
+ {
+  "id": "snow",
+  "name": "缓缓飘雪",
+  "category": "天气系统",
+  "duration": 7,
+  "description": "远处细雪缓慢飘落，少量近景柔焦雪片从镜头前经过，带不同风速、翻转与透明度。",
+  "sound": "建议：轻风；雪花本身不必配音。当前为无声演示。",
+  "tracks": [
+   {
+    "kind": "particles",
+    "variant": "snow",
+    "count": 110,
+    "at": 0,
+    "duration": 7
+   }
+  ]
+ },
+ {
+  "id": "seagulls",
+  "name": "海鸥飞过",
+  "category": "环境系统",
+  "duration": 14.5,
+  "description": "先飞出两只海鸥，再飞出三只，从右侧近景沿弧线振翅飞向远处。相邻振翅姿态逐帧过渡，单项演示循环播放。",
+  "sound": "建议：海鸥叫与海浪。当前为无声演示。",
+  "tracks": [
+   {
+    "kind": "birds",
+    "variant": "gull",
+    "count": 2,
+    "at": 0,
+    "duration": 6.8
+   },
+   {
+    "kind": "birds",
+    "variant": "gull",
+    "count": 3,
+    "at": 7.5,
+    "duration": 6.8
+   }
+  ]
+ },
+ {
+  "id": "awkward-crow",
+  "name": "顶部乌鸦与省略号",
+  "category": "人物表现",
+  "duration": 6,
+  "description": "带羽毛层次的乌鸦以四帧振翅动画从屏幕顶部掠过，人物侧上方依次浮出三枚墨点。",
+  "sound": "建议：两声夸张乌鸦叫。当前为无声演示。",
+  "tracks": [
+   {
+    "kind": "birds",
+    "variant": "crow",
+    "count": 1,
+    "at": 0.5,
+    "duration": 5
+   },
+   {
+    "kind": "text",
+    "text": "……",
+    "anchor": "head",
+    "motion": "float",
+    "at": 0,
+    "duration": 4.5
+   }
+  ]
+ },
+ {
+  "id": "question",
+  "name": "人物头顶问号",
+  "category": "人物表现",
+  "duration": 3.5,
+  "description": "手绘墨线问号在人物侧上方弹出，轻微回弹后消失，避免遮挡面部。",
+  "sound": "建议：简短疑问提示音。当前为无声演示。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "?",
+    "anchor": "head",
+    "motion": "pop",
+    "at": 0,
+    "duration": 3
+   }
+  ]
+ },
+ {
+  "id": "comic-impact",
+  "name": "拟声文字呼吸缩放",
+  "category": "演出标记",
+  "duration": 4.5,
+  "description": "黑白笔触“砰！”倾斜弹出并呼吸缩放，保留笔画不齐的漫画手写感。",
+  "sound": "建议：与文字匹配的碰撞声。当前为无声演示。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "砰！",
+    "anchor": "center",
+    "motion": "pulse",
+    "at": 0,
+    "duration": 4
+   }
+  ]
+ },
+ {
+  "id": "heat-distortion",
+  "name": "全背景热浪扭曲",
+  "category": "主观感知",
+  "duration": 6,
+  "description": "整张背景叠加宽幅流动热浪，仅边缘轻微收敛以避免露边；人物与对白保持清晰。",
+  "sound": "通常无需直接配音，可配炎夏环境声。",
+  "tracks": [
+   {
+    "kind": "distortion",
+    "strength": 18,
+    "at": 0,
+    "duration": 5.5
+   }
+  ]
+ },
+ {
+  "id": "startled-awakening",
+  "name": "复合预设：惊醒",
+  "category": "复合演出",
+  "duration": 7,
+  "description": "黑暗→尝试睁眼→恢复焦点→短暂亮光→镜头推近与轻震→惊叹号。整段只由预设编排。",
+  "sound": "建议：呼吸、心跳与惊醒短音。当前为无声演示。",
+  "tracks": [
+   {
+    "kind": "eyelids",
+    "pattern": "struggle",
+    "at": 0,
+    "duration": 3.8
+   },
+   {
+    "kind": "blur",
+    "strength": 12,
+    "at": 0,
+    "duration": 4.2
+   },
+   {
+    "kind": "flash",
+    "strength": 0.45,
+    "at": 3.7,
+    "duration": 0.5
+   },
+   {
+    "kind": "camera",
+    "scale": 1.12,
+    "at": 3.7,
+    "duration": 2.5
+   },
+   {
+    "kind": "shake",
+    "strength": 5,
+    "at": 3.8,
+    "duration": 0.55
+   },
+   {
+    "kind": "text",
+    "text": "!",
+    "anchor": "head",
+    "motion": "pop",
+    "at": 4,
+    "duration": 2
+   }
+  ]
+ },
+ {
+  "id": "drizzle",
+  "name": "细雨",
+  "category": "天气系统",
+  "duration": 8.2,
+  "description": "可独立调整数量、粒子大小、透明度、风向和下落速度。",
+  "sound": "建议：雨声或风声循环；当前无声。",
+  "tracks": [
+   {
+    "kind": "particles",
+    "variant": "rain",
+    "count": 100,
+    "wind": 0.3,
+    "size": 1,
+    "opacity": 0.5,
+    "duration": 8,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "downpour",
+  "name": "暴雨",
+  "category": "天气系统",
+  "duration": 8.2,
+  "description": "可独立调整数量、粒子大小、透明度、风向和下落速度。",
+  "sound": "建议：雨声或风声循环；当前无声。",
+  "tracks": [
+   {
+    "kind": "particles",
+    "variant": "rain",
+    "count": 600,
+    "wind": 1.7,
+    "size": 1.8,
+    "opacity": 0.95,
+    "duration": 8,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "flurry",
+  "name": "小雪",
+  "category": "天气系统",
+  "duration": 8.2,
+  "description": "可独立调整数量、粒子大小、透明度、风向和下落速度。",
+  "sound": "建议：雨声或风声循环；当前无声。",
+  "tracks": [
+   {
+    "kind": "particles",
+    "variant": "snow",
+    "count": 70,
+    "wind": 0.3,
+    "size": 1.2,
+    "opacity": 0.7,
+    "duration": 8,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "blizzard",
+  "name": "暴风雪",
+  "category": "天气系统",
+  "duration": 8.2,
+  "description": "可独立调整数量、粒子大小、透明度、风向和下落速度。",
+  "sound": "建议：雨声或风声循环；当前无声。",
+  "tracks": [
+   {
+    "kind": "particles",
+    "variant": "snow",
+    "count": 400,
+    "wind": 2.5,
+    "size": 2,
+    "opacity": 0.95,
+    "duration": 8,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "fog",
+  "name": "流动薄雾",
+  "category": "天气系统",
+  "duration": 7.2,
+  "description": "程序化环境演出；可调整数量、大小、透明度与风向。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "fog",
+    "count": 28,
+    "size": 2,
+    "opacity": 0.7,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "wind",
+  "name": "风的轨迹",
+  "category": "天气系统",
+  "duration": 7.2,
+  "description": "程序化环境演出；可调整数量、大小、透明度与风向。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "wind",
+    "count": 20,
+    "size": 1,
+    "opacity": 0.5,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "petals",
+  "name": "花瓣飘落",
+  "category": "环境系统",
+  "duration": 7.2,
+  "description": "六种不对称、侧卷与弯月形花瓣，以浅粉色晕染和局部卷边阴影表现弧度，随风轻摆滑落；可调整数量、大小、透明度、风向及演出速度。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "petals",
+    "count": 100,
+    "size": 1,
+    "opacity": 0.9,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "leaves",
+  "name": "落叶翻飞",
+  "category": "环境系统",
+  "duration": 7.2,
+  "description": "三种漫画秋叶，以墨色轮廓、两级平涂和少量叶脉表现，按不同速度旋转下落；可调整数量、大小、透明度、风向及演出速度。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "leaves",
+    "count": 100,
+    "size": 1,
+    "opacity": 0.9,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "butterflies",
+  "name": "蝴蝶飞舞",
+  "category": "环境系统",
+  "duration": 7.2,
+  "description": "蝴蝶具有前后翅轮廓、翅脉、斑纹和触角，双翼独立振动并沿曲线盘旋；可调整数量、大小、透明度、风向及演出速度。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "butterflies",
+    "count": 9,
+    "size": 1,
+    "opacity": 0.9,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "fireflies",
+  "name": "萤火虫",
+  "category": "环境系统",
+  "duration": 7.2,
+  "description": "程序化环境演出；可调整数量、大小、透明度与风向。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "fireflies",
+    "count": 100,
+    "size": 1,
+    "opacity": 0.9,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "embers",
+  "name": "火星上升",
+  "category": "环境系统",
+  "duration": 7.2,
+  "description": "细长火屑随热流上升，带橙红拖尾和明亮火芯，逐渐冷却熄灭；默认160个，可调整数量、大小、透明度与风向。",
+  "sound": "持续的木柴燃烧与噼啪声，与正式演出共用音源。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "embers",
+    "count": 160,
+    "size": 1.6,
+    "opacity": 1,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "dust",
+  "name": "尘土飞扬",
+  "category": "环境系统",
+  "duration": 7.2,
+  "description": "低处扬起的土黄色尘团随风翻卷、扩散，夹杂细小砂粒并逐渐消散；可调整数量、大小、透明度与风向。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "dust",
+    "count": 100,
+    "size": 1,
+    "opacity": 0.6,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "smoke",
+  "name": "烟气上升",
+  "category": "环境系统",
+  "duration": 7.2,
+  "description": "程序化环境演出；可调整数量、大小、透明度与风向。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "smoke",
+    "count": 40,
+    "size": 2,
+    "opacity": 0.7,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "bubbles",
+  "name": "水中气泡",
+  "category": "环境系统",
+  "duration": 7.2,
+  "description": "程序化环境演出；可调整数量、大小、透明度与风向。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "bubbles",
+    "count": 100,
+    "size": 1,
+    "opacity": 0.7,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "rays",
+  "name": "斜射光束",
+  "category": "环境系统",
+  "duration": 7.2,
+  "description": "程序化环境演出；可调整数量、大小、透明度与风向。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "ambient",
+    "variant": "rays",
+    "count": 9,
+    "size": 2,
+    "opacity": 0.5,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "lightning",
+  "name": "闪电",
+  "category": "天气系统",
+  "duration": 8.2,
+  "description": "场景先渐暗，四道不同位置的分叉闪电先后照亮天空与画面，短暂回闪后恢复暗色，最后渐亮。",
+  "sound": "建议：闪电后稍延迟响起雷声；当前无声。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "lightning",
+    "strength": 0.75,
+    "duration": 8,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "vignette",
+  "name": "暗角压迫",
+  "category": "主观感知",
+  "duration": 4.2,
+  "description": "调整演出强度、颜色和持续时间。遮罩只作用于场景，不遮住操作界面。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "vignette",
+    "strength": 0.75,
+    "color": "#202126",
+    "duration": 4,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "letterbox",
+  "name": "电影上下遮幅",
+  "category": "镜头系统",
+  "duration": 4.2,
+  "description": "调整演出强度、颜色和持续时间。遮罩只作用于场景，不遮住操作界面。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "letterbox",
+    "strength": 0.75,
+    "duration": 4,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "iris",
+  "name": "圆形开合",
+  "category": "镜头系统",
+  "duration": 4.2,
+  "description": "调整演出强度、颜色和持续时间。遮罩只作用于场景，不遮住操作界面。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "iris",
+    "strength": 0.75,
+    "duration": 4,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "wipe",
+  "name": "斜向擦拭",
+  "category": "镜头系统",
+  "duration": 4.2,
+  "description": "调整演出强度、颜色和持续时间。遮罩只作用于场景，不遮住操作界面。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "wipe",
+    "strength": 0.75,
+    "duration": 4,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "fade",
+  "name": "淡入淡出",
+  "category": "镜头系统",
+  "duration": 4.2,
+  "description": "调整演出强度、颜色和持续时间。遮罩只作用于场景，不遮住操作界面。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "fade",
+    "strength": 0.75,
+    "duration": 4,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "speedlines",
+  "name": "漫画速度线",
+  "category": "演出标记",
+  "duration": 4.2,
+  "description": "调整演出强度、颜色和持续时间。遮罩只作用于场景，不遮住操作界面。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "speedlines",
+    "strength": 0.75,
+    "duration": 4,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "impact",
+  "name": "冲击放射线",
+  "category": "演出标记",
+  "duration": 4.2,
+  "description": "调整演出强度、颜色和持续时间。遮罩只作用于场景，不遮住操作界面。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "impact",
+    "strength": 0.75,
+    "duration": 4,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "slash",
+  "name": "刀光斩击",
+  "category": "演出标记",
+  "duration": 1.8,
+  "description": "短暂黑场后，白色弧形刀光快速斜斩，黑幕沿斩痕分开，原场景重新显现；对白和操作区保持可见。",
+  "sound": "建议：短促拔刀、挥斩声；当前无声。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "slash",
+    "strength": 0.75,
+    "duration": 1.6,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "focus",
+  "name": "聚焦光线",
+  "category": "演出标记",
+  "duration": 4.2,
+  "description": "调整演出强度、颜色和持续时间。遮罩只作用于场景，不遮住操作界面。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "focus",
+    "strength": 0.75,
+    "duration": 4,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "blood",
+  "name": "受伤红边",
+  "category": "主观感知",
+  "duration": 4.2,
+  "description": "调整演出强度、颜色和持续时间。遮罩只作用于场景，不遮住操作界面。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "blood",
+    "strength": 0.75,
+    "duration": 4,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "heartbeat",
+  "name": "心跳红边",
+  "category": "主观感知",
+  "duration": 4.2,
+  "description": "调整演出强度、颜色和持续时间。遮罩只作用于场景，不遮住操作界面。",
+  "sound": "建议：雷声、划切或心跳等对应音效；当前无声。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "heartbeat",
+    "strength": 0.75,
+    "duration": 4,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "heartbeat-zoom",
+  "name": "心跳收缩",
+  "category": "主观感知",
+  "duration": 6.5,
+  "description": "背景与人物围绕画面中心，按两次收缩回弹、短暂停顿的心跳节奏同步缩放。可调整强度和演出速度；对白与按钮保持稳定。",
+  "sound": "建议：同步双拍心跳；当前无声。",
+  "tracks": [
+   {
+    "kind": "overlay",
+    "variant": "heartbeat-zoom",
+    "strength": 0.85,
+    "duration": 6.3,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "tone-night",
+  "name": "夜色降临",
+  "category": "主观感知",
+  "duration": 5.2,
+  "description": "背景颜色滤镜渐入再恢复，人物与对白不受影响。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "tone",
+    "variant": "night",
+    "strength": 0.85,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "tone-warm",
+  "name": "暖色回忆",
+  "category": "主观感知",
+  "duration": 5.2,
+  "description": "背景颜色滤镜渐入再恢复，人物与对白不受影响。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "tone",
+    "variant": "warm",
+    "strength": 0.85,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "tone-cold",
+  "name": "冷色气氛",
+  "category": "主观感知",
+  "duration": 5.2,
+  "description": "背景颜色滤镜渐入再恢复，人物与对白不受影响。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "tone",
+    "variant": "cold",
+    "strength": 0.85,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "tone-sepia",
+  "name": "旧照片回忆",
+  "category": "主观感知",
+  "duration": 5.2,
+  "description": "背景颜色滤镜渐入再恢复，人物与对白不受影响。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "tone",
+    "variant": "sepia",
+    "strength": 0.85,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "tone-grayscale",
+  "name": "黑白失色",
+  "category": "主观感知",
+  "duration": 5.2,
+  "description": "背景颜色滤镜渐入再恢复，人物与对白不受影响。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "tone",
+    "variant": "grayscale",
+    "strength": 0.85,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "tone-negative",
+  "name": "负片冲击",
+  "category": "主观感知",
+  "duration": 5.2,
+  "description": "背景颜色滤镜渐入再恢复，人物与对白不受影响。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "tone",
+    "variant": "negative",
+    "strength": 0.85,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "actor-enter",
+  "name": "人物滑入",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "直接作用于当前立绘，结束或停止后恢复初始位置与状态。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "actor",
+    "variant": "enter",
+    "strength": 1,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "actor-exit",
+  "name": "人物退场",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "直接作用于当前立绘，结束或停止后恢复初始位置与状态。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "actor",
+    "variant": "exit",
+    "strength": 1,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "actor-bounce",
+  "name": "人物跳动",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "直接作用于当前立绘，结束或停止后恢复初始位置与状态。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "actor",
+    "variant": "bounce",
+    "strength": 1,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "actor-tremble",
+  "name": "人物发抖",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "直接作用于当前立绘，结束或停止后恢复初始位置与状态。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "actor",
+    "variant": "tremble",
+    "strength": 1,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "actor-lean",
+  "name": "人物倾身",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "直接作用于当前立绘，结束或停止后恢复初始位置与状态。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "actor",
+    "variant": "lean",
+    "strength": 1,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "actor-breath",
+  "name": "人物呼吸",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "直接作用于当前立绘，结束或停止后恢复初始位置与状态。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "actor",
+    "variant": "breath",
+    "strength": 1,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "actor-ghost",
+  "name": "人物虚化",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "直接作用于当前立绘，结束或停止后恢复初始位置与状态。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "actor",
+    "variant": "ghost",
+    "strength": 1,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "zoom",
+  "name": "缓慢推近与拉回",
+  "category": "镜头系统",
+  "duration": 5.2,
+  "description": "可调缩放、水平与垂直位移、倾斜角度；移动时自动增加背景覆盖以避免露边。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "camera",
+    "scale": 1.45,
+    "panX": 0,
+    "panY": 0,
+    "angle": 0,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "pan-left",
+  "name": "横向摇镜",
+  "category": "镜头系统",
+  "duration": 5.2,
+  "description": "可调缩放、水平与垂直位移、倾斜角度；移动时自动增加背景覆盖以避免露边。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "camera",
+    "scale": 1.3,
+    "panX": 90,
+    "panY": 0,
+    "angle": 0,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "pan-up",
+  "name": "仰视移镜",
+  "category": "镜头系统",
+  "duration": 5.2,
+  "description": "可调缩放、水平与垂直位移、倾斜角度；移动时自动增加背景覆盖以避免露边。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "camera",
+    "scale": 1.3,
+    "panX": 0,
+    "panY": 50,
+    "angle": 0,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "dutch",
+  "name": "倾斜镜头",
+  "category": "镜头系统",
+  "duration": 5.2,
+  "description": "可调缩放、水平与垂直位移、倾斜角度；移动时自动增加背景覆盖以避免露边。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "camera",
+    "scale": 1.3,
+    "panX": 0,
+    "panY": 0,
+    "angle": 8,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "dizzy",
+  "name": "眩晕镜头",
+  "category": "镜头系统",
+  "duration": 5.2,
+  "description": "可调缩放、水平与垂直位移、倾斜角度；移动时自动增加背景覆盖以避免露边。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "camera",
+    "scale": 1.2,
+    "panX": 20,
+    "panY": 0,
+    "angle": -5,
+    "at": 0,
+    "duration": 5
+   },
+   {
+    "kind": "distortion",
+    "strength": 12,
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "eyes-open",
+  "name": "缓缓睁眼",
+  "category": "主观感知",
+  "duration": 5.2,
+  "description": "弧形眼睑连续打开或合拢，调整轨道时长控制速度。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "eyelids",
+    "pattern": "open",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "eyes-close",
+  "name": "缓缓闭眼",
+  "category": "主观感知",
+  "duration": 5.2,
+  "description": "弧形眼睑连续打开或合拢，调整轨道时长控制速度。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "eyelids",
+    "pattern": "close",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "sleep",
+  "name": "睡眠符号",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "可调符号大小、位置、内容与动画方式。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "Zzz",
+    "anchor": "head",
+    "motion": "float",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "surprise",
+  "name": "惊讶",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "可调符号大小、位置、内容与动画方式。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "!",
+    "anchor": "head",
+    "motion": "pop",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "anger",
+  "name": "愤怒青筋",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "可调符号大小、位置、内容与动画方式。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "anger",
+    "anchor": "head",
+    "motion": "pulse",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "sweat",
+  "name": "汗滴",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "可调符号大小、位置、内容与动画方式。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "sweat",
+    "anchor": "head",
+    "motion": "float",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "heart",
+  "name": "心动",
+  "category": "人物表现",
+  "duration": 5.2,
+  "description": "可调符号大小、位置、内容与动画方式。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "heart",
+    "anchor": "head",
+    "motion": "pulse",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "danger",
+  "name": "危险提示",
+  "category": "演出标记",
+  "duration": 5.2,
+  "description": "可调符号大小、位置、内容与动画方式。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "危",
+    "anchor": "center",
+    "motion": "pulse",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "silence",
+  "name": "寂静拟声",
+  "category": "演出标记",
+  "duration": 5.2,
+  "description": "可调符号大小、位置、内容与动画方式。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "シーン",
+    "anchor": "center",
+    "motion": "float",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "rumble",
+  "name": "压迫拟声",
+  "category": "演出标记",
+  "duration": 5.2,
+  "description": "可调符号大小、位置、内容与动画方式。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "ゴゴゴ",
+    "anchor": "center",
+    "motion": "pulse",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "bang",
+  "name": "重击拟声",
+  "category": "演出标记",
+  "duration": 5.2,
+  "description": "可调符号大小、位置、内容与动画方式。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "text",
+    "text": "咚！",
+    "anchor": "center",
+    "motion": "pop",
+    "at": 0,
+    "duration": 5
+   }
+  ]
+ },
+ {
+  "id": "storm",
+  "name": "雷雨交加",
+  "category": "复合演出",
+  "duration": 8.2,
+  "description": "雨幕、冷色环境与闪电组合。",
+  "sound": "建议：持续风雨与延迟雷声；当前无声。",
+  "tracks": [
+   {
+    "kind": "particles",
+    "variant": "rain",
+    "count": 500,
+    "wind": 1.5,
+    "duration": 8,
+    "at": 0
+   },
+   {
+    "kind": "overlay",
+    "variant": "lightning",
+    "at": 2,
+    "duration": 3
+   },
+   {
+    "kind": "tone",
+    "variant": "cold",
+    "duration": 8,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "sword-clash",
+  "name": "刀剑碰撞",
+  "category": "复合演出",
+  "duration": 2.2,
+  "description": "推镜、刀光、闪白和冲击震动组合。",
+  "sound": "建议：金属碰撞；当前无声。",
+  "tracks": [
+   {
+    "kind": "camera",
+    "scale": 1.2,
+    "duration": 2,
+    "at": 0
+   },
+   {
+    "kind": "overlay",
+    "variant": "slash",
+    "duration": 1,
+    "at": 0
+   },
+   {
+    "kind": "flash",
+    "strength": 0.4,
+    "at": 0.4,
+    "duration": 0.3
+   },
+   {
+    "kind": "shake",
+    "strength": 12,
+    "at": 0.5,
+    "duration": 0.6
+   },
+   {
+    "kind": "overlay",
+    "variant": "impact",
+    "at": 0.4,
+    "duration": 1
+   }
+  ]
+ },
+ {
+  "id": "horror",
+  "name": "恐怖预警",
+  "category": "复合演出",
+  "duration": 6.2,
+  "description": "失色、暗角、红色心跳与缓慢推近组合。",
+  "sound": "建议：低频环境与心跳；当前无声。",
+  "tracks": [
+   {
+    "kind": "tone",
+    "variant": "grayscale",
+    "duration": 6,
+    "at": 0
+   },
+   {
+    "kind": "overlay",
+    "variant": "vignette",
+    "duration": 6,
+    "at": 0
+   },
+   {
+    "kind": "overlay",
+    "variant": "heartbeat",
+    "duration": 6,
+    "at": 0
+   },
+   {
+    "kind": "camera",
+    "scale": 1.15,
+    "duration": 6,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "dream",
+  "name": "梦境",
+  "category": "复合演出",
+  "duration": 7.2,
+  "description": "柔焦、暖色与浮动光点组合。",
+  "sound": "通常无需独立音效。",
+  "tracks": [
+   {
+    "kind": "blur",
+    "strength": 5,
+    "duration": 7,
+    "at": 0
+   },
+   {
+    "kind": "ambient",
+    "variant": "fireflies",
+    "count": 30,
+    "duration": 7,
+    "at": 0
+   },
+   {
+    "kind": "tone",
+    "variant": "warm",
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ },
+ {
+  "id": "bird-flock",
+  "name": "远处鸟群",
+  "category": "环境系统",
+  "duration": 7.2,
+  "description": "多只小型鸟以错位节奏从高空飞过。",
+  "sound": "建议：远处鸟鸣；当前无声。",
+  "tracks": [
+   {
+    "kind": "birds",
+    "variant": "crow",
+    "count": 8,
+    "size": 0.45,
+    "duration": 7,
+    "at": 0
+   }
+  ]
+ }
+]
