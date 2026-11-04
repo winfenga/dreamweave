@@ -175,7 +175,7 @@ check('竖版开本（高 > 宽 × 1.2）', (shelf?.sampleH ?? 0) > (shelf?.samp
 // ============ ② 工作库格式兼容（A） ============
 mark('格式兼容')
 const fmt = await ev(`(async () => {
-  const ws = await window.feather.listWorkspaces()
+  const ws = await window.dreamweave.listWorkspaces()
   if (!ws.ok) return { ok: false, error: ws.error, count: 0 }
   // 声明式检查：不只看能不能列出来，还要确认这些库里**确实大多是历史 format**，
   // 否则"全部都通过了"可能只是因为根本没有老库。
@@ -188,10 +188,10 @@ check('没有因格式不匹配产生的损坏项', (fmt?.broken ?? 1) === 0, `$
 
 // 直接读老库的 index.json，确认磁盘上仍是历史 format 串 —— 证明"读兼容"不是靠迁移
 const legacyOnDisk = await ev(`(async () => {
-  const ws = await window.feather.listWorkspaces()
+  const ws = await window.dreamweave.listWorkspaces()
   if (!ws.ok || !ws.items.length) return { ok: false }
   // 逐个检查，统计实际的历史 format 数量（证明兼容确实被用到）
-  const r = await window.feather.inspectWorkspaceFormats()
+  const r = await window.dreamweave.inspectWorkspaceFormats()
   return r
 })()`)
 check('磁盘上仍有历史 format（说明兼容生效而非已迁移）',

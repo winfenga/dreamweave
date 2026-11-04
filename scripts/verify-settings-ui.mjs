@@ -153,18 +153,18 @@ check(
 
 // ---------- ⑤ 保存并回读 ----------
 const saved = await ev(`(async () => {
-  const s = await window.feather.getSettings()
+  const s = await window.dreamweave.getSettings()
   s.comfyui.sceneNegativePrompt = '验证用场景负面词-TESTING-1234567890'
   s.comfyui.promptRewriteEnabled = true
   s.comfyui.promptRewriteTarget = 'moss-image'
   s.comfyui.charArtStylePreset = 'realistic'
-  const r = await window.feather.saveSettings({ comfyui: s.comfyui })
+  const r = await window.dreamweave.saveSettings({ comfyui: s.comfyui })
   return { ok: r.ok, error: r.error }
 })()`)
 check('保存设置成功', saved?.ok, saved?.error ?? '')
 
 const reread = await ev(`(async () => {
-  const s = await window.feather.getSettings()
+  const s = await window.dreamweave.getSettings()
   return {
     sceneNeg: s.comfyui.sceneNegativePrompt,
     rewrite: s.comfyui.promptRewriteEnabled,
@@ -179,12 +179,12 @@ check('画风预设已持久化', reread?.charPreset === 'realistic', `got=${rer
 
 // 清理：恢复默认，避免污染后续测试
 await ev(`(async () => {
-  const s = await window.feather.getSettings()
+  const s = await window.dreamweave.getSettings()
   s.comfyui.sceneNegativePrompt = ''
   s.comfyui.promptRewriteEnabled = false
   s.comfyui.promptRewriteTarget = 'qwen-image-2.1'
   s.comfyui.charArtStylePreset = 'anime'
-  await window.feather.saveSettings({ comfyui: s.comfyui })
+  await window.dreamweave.saveSettings({ comfyui: s.comfyui })
   return true
 })()`)
 

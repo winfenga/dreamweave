@@ -90,7 +90,7 @@ const PKG = argv.find((a) => !a.startsWith('--') && a.endsWith('.t2w')) ?? 'D:/g
 
 // 导入（会新建工作库；若已存在则再多一本，无妨）
 const imported = await ev(`(async () => {
-  const r = await window.feather.importPackage(${JSON.stringify(PKG)}, 't2w')
+  const r = await window.dreamweave.importPackage(${JSON.stringify(PKG)}, 't2w')
   return { ok: r.ok, error: r.error, title: r.summary?.project?.title }
 })()`)
 check('导入漫画包', imported?.ok, imported?.error ?? 'ok')
@@ -103,13 +103,13 @@ await send('Page.bringToFront')
 await sleep(500)
 
 await ev(`window.__pkg = ${JSON.stringify(PKG)}; true`)
-const opened = await ev("(async () => {\nconst ws = await window.feather.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.feather.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
+const opened = await ev("(async () => {\nconst ws = await window.dreamweave.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.dreamweave.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
 check('书库中找到并点开这本书', opened?.ok, opened?.why ?? 'ok')
 await sleep(1500)
 
 // ============ ① IPC 模型 ============
 const model = await ev(`(async () => {
-  const r = await window.feather.getMangaView()
+  const r = await window.dreamweave.getMangaView()
   if (!r.ok || !r.data) return { ok: false, error: r.error }
   const d = r.data
   return {

@@ -218,7 +218,7 @@ let stopFullScreenSync: (() => void) | null = null
 
 async function setFullScreen(on: boolean): Promise<void> {
   try {
-    const r = await window.feather.setFullScreen(on)
+    const r = await window.dreamweave.setFullScreen(on)
     fullScreen.value = r.fullScreen
   } catch {
     // IPC 不可用（例如脱离 Electron 环境预览）时退化为非全屏，不让 UI 卡在错误状态
@@ -228,7 +228,7 @@ async function setFullScreen(on: boolean): Promise<void> {
 
 async function toggleFullScreen(): Promise<void> {
   try {
-    const r = await window.feather.toggleFullScreen()
+    const r = await window.dreamweave.toggleFullScreen()
     fullScreen.value = r.fullScreen
   } catch {
     fullScreen.value = false
@@ -293,7 +293,7 @@ watch(
       audio.setBgm(null)
       return
     }
-    void window.feather.resolveBgm(p).then((r) => {
+    void window.dreamweave.resolveBgm(p).then((r) => {
       if (r.ok && r.url) audio.setBgm(r.url)
       else paceNote.value = `BGM 不可用：${r.error ?? '未知错误'}`
     })
@@ -605,11 +605,11 @@ onMounted(() => {
     }
   }
   // 系统侧（F11 / 系统菜单）改了全屏也要同步按钮文案，故订阅主进程推送
-  stopFullScreenSync = window.feather.onFullScreenChanged((on) => {
+  stopFullScreenSync = window.dreamweave.onFullScreenChanged((on) => {
     fullScreen.value = on
   })
   // 首帧对齐：组件挂载时窗口可能已经是全屏态
-  void window.feather
+  void window.dreamweave
     .getFullScreen()
     .then((on) => {
       fullScreen.value = on

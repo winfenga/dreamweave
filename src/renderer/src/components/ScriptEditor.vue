@@ -143,7 +143,7 @@ async function save(): Promise<void> {
   saving.value = true
   message.value = ''
   try {
-    const res = await window.feather.saveScriptAction(
+    const res = await window.dreamweave.saveScriptAction(
       {
         chapterSeq: a.chapterSeq,
         order: a.order,

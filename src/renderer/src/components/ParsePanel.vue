@@ -92,7 +92,7 @@ const actionsDisabled = computed(() => busy.value || running.value)
 async function refreshStatus(): Promise<void> {
   if (!runId.value) return
   try {
-    const st: ParseStatus = await window.feather.parseStatus(runId.value)
+    const st: ParseStatus = await window.dreamweave.parseStatus(runId.value)
     tasks.value = st.tasks
     done.value = st.done
     total.value = st.total
@@ -141,7 +141,7 @@ async function finishRun(): Promise<void> {
 /** 拉一次任务面板（不依赖 runId；打开面板即拉）。 */
 async function refreshOverview(): Promise<void> {
   try {
-    const res = await window.feather.tasksOverview(props.pkgId)
+    const res = await window.dreamweave.tasksOverview(props.pkgId)
     if (!res.ok || !res.overview) {
       overviewError.value = res.error ?? '读取任务面板失败'
       return
@@ -158,7 +158,7 @@ async function start(range: string[] | 'all', force = false): Promise<void> {
   busy.value = true
   error.value = ''
   try {
-    const res = await window.feather.parseStart(props.pkgId, range, force)
+    const res = await window.dreamweave.parseStart(props.pkgId, range, force)
     if (!res.ok || !res.runId) {
       error.value = res.error ?? '启动解析失败'
       return
@@ -214,7 +214,7 @@ function rerun(taskId: string): void {
 async function cancel(): Promise<void> {
   if (!runId.value) return
   try {
-    await window.feather.parseCancel(runId.value)
+    await window.dreamweave.parseCancel(runId.value)
   } catch (e) {
     error.value = (e as Error).message
   }
@@ -224,7 +224,7 @@ onMounted(() => {
   // 打开面板立即拉一次任务面板（不依赖 runId，刷新页面也能看到本机成绩）
   void refreshOverview()
 
-  unsub = window.feather.onParseProgress((ev: ParseProgress) => {
+  unsub = window.dreamweave.onParseProgress((ev: ParseProgress) => {
     if (ev.pkgId !== props.pkgId) return
     if (ev.runId) runId.value = ev.runId
     if (ev.done !== undefined) done.value = ev.done

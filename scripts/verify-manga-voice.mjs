@@ -97,12 +97,12 @@ const ensureBook = await ev(`(async () => {
   // 复用条件必须同时看**渲染层**：主进程会话可能还在，但页面已回到落地页（书库），
   // 那时侧栏没有「漫画阅读」入口，后续 UI 断言会在"没打开任何书"的页面上跑。
   const uiOpen = [...document.querySelectorAll('.side-item')].some(b => b.textContent.includes('漫画阅读'))
-  let mv = await window.feather.getMangaView()
+  let mv = await window.dreamweave.getMangaView()
   if (mv.ok && mv.data && mv.data.dubbing.length > 0 && uiOpen) {
     return { ok: true, reused: true, title: '(当前已打开)' }
   }
   // 导入漫画包（同路径重复导入会新建工作库，无妨）
-  const imp = await window.feather.importPackage('D:/galcomic/gmzz-10.t2w', 't2w')
+  const imp = await window.dreamweave.importPackage('D:/galcomic/gmzz-10.t2w', 't2w')
   if (!imp.ok) return { ok: false, err: imp.error ?? '导入失败' }
   return { ok: true, reused: false, title: imp.summary?.project?.title ?? '', needReload: true }
 })()`)
@@ -113,7 +113,7 @@ if (ensureBook?.needReload) {
   await sleep(2800)
   await send('Page.bringToFront')
   await ev("window.__pkg = \"D:/galcomic/gmzz-10.t2w\"; true")
-const opened = await ev("(async () => {\nconst ws = await window.feather.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.feather.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
+const opened = await ev("(async () => {\nconst ws = await window.dreamweave.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.dreamweave.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
   check('打开漫画书', opened?.ok, opened?.why ?? '')
   await sleep(1600)
   await ev(`(() => { const hit = [...document.querySelectorAll('.side-item')].find(b => b.textContent.includes('漫画阅读')); if (hit) hit.click(); return !!hit })()`)
@@ -121,7 +121,7 @@ const opened = await ev("(async () => {\nconst ws = await window.feather.listWor
 }
 
 const prep = await ev(`(async () => {
-  const mv = await window.feather.getMangaView()
+  const mv = await window.dreamweave.getMangaView()
   if (!mv.ok || !mv.data) return { ok: false, err: mv.error ?? '无漫画数据' }
   const d = mv.data
   const ch1 = d.chapters.find(c => c.chapterSeq === 1) || d.chapters[0]
@@ -142,7 +142,7 @@ check('第 1 章有配音片段', (prep?.clipCount ?? 0) > 0, `${prep?.clipCount
 // ============ ① 真实音频可解码（这是「有没有配音」的物理前提）============
 mark('音频可解码')
 const audioProbe = await ev(`(async () => {
-  const mv = await window.feather.getMangaView()
+  const mv = await window.dreamweave.getMangaView()
   const clip = mv.data.dubbing[0]
   if (!clip) return { ok: false }
   const a = new Audio()

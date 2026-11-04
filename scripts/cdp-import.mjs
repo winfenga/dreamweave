@@ -37,7 +37,7 @@ const ev = async (expr) => {
 
 const pathLiteral = JSON.stringify(target)
 const res = await ev(`(async () => {
-  const r = await window.feather.importPackage(${pathLiteral}, 't2w')
+  const r = await window.dreamweave.importPackage(${pathLiteral}, 't2w')
   return { ok: r.ok, canceled: r.canceled, error: r.error, title: r.summary?.project?.title, chapters: r.summary?.chapters?.length }
 })()`)
 console.log('导入结果：', JSON.stringify(res, null, 2))

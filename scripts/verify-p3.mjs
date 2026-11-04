@@ -68,7 +68,7 @@ const normPath = (p) => String(p ?? '').replace(/\\/g, '/').replace(/\/+$/, '')
  */
 async function resolveWorkspaceRoot() {
   const raw = await ev(`(async()=>{
-    var r = await window.feather.listWorkspaces()
+    var r = await window.dreamweave.listWorkspaces()
     return JSON.stringify((r.items || []).filter(function (i) { return i.current }).map(function (i) { return i.root }))
   })()`)
   let roots = []
@@ -235,7 +235,7 @@ console.log('测试包:', PKG, (originalSize / 1048576).toFixed(1) + 'MB')
 // ---------------------------------------------------------------- ① 导入
 section('① 导入测试包副本')
 const imp = await ev(`(async()=>{
-  const r = await window.feather.importPackage(${JSON.stringify(PKG)})
+  const r = await window.dreamweave.importPackage(${JSON.stringify(PKG)})
   if (!r.ok) return r
   const i = document.querySelector('#app').__vue_app__._instance
   i.setupState.summary = r.summary

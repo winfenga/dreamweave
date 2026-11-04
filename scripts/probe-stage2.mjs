@@ -36,7 +36,7 @@ await send('Page.bringToFront')
 await sleep(500)
 
 // 策略改回 dubbing
-await ev(`(async()=>{await window.feather.saveSettings({autoplayPolicy:'dubbing', dialogMode:'normal', stageZoom:1}); return true})()`)
+await ev(`(async()=>{await window.dreamweave.saveSettings({autoplayPolicy:'dubbing', dialogMode:'normal', stageZoom:1}); return true})()`)
 await sleep(300)
 
 // 导航到「有立绘的 say 句」
@@ -139,7 +139,7 @@ console.log(
   '[mp3 直播验证]',
   JSON.stringify(
     await ev(`(async()=>{
-      const r=await window.feather.getView(); const d=r.data;
+      const r=await window.dreamweave.getView(); const d=r.data;
       if(!d.dubbing.length) return {note:'无配音'};
       const u=d.dubbing[0].url;
       const res=await fetch(u,{headers:{Range:'bytes=0-1023'}});

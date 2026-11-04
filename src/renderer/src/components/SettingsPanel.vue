@@ -84,7 +84,7 @@ const TTS_HINT =
 onMounted(() => void loadAll())
 
 async function loadAll(): Promise<void> {
-  const s = await window.feather.getSettings()
+  const s = await window.dreamweave.getSettings()
   voiceVolume.value = s.voiceVolume
   bgmPath.value = s.bgmPath
   bgmVolume.value = s.bgmVolume
@@ -118,7 +118,7 @@ async function probeComfy(): Promise<void> {
   comfyProbing.value = true
   comfyProbeState.value = '探活中…'
   try {
-    const res = await window.feather.imagegenProbe()
+    const res = await window.dreamweave.imagegenProbe()
     comfyProbeState.value = res.ok ? res.info ?? '已就绪' : res.error ?? '探活失败'
   } catch (e) {
     comfyProbeState.value = (e as Error).message
@@ -138,7 +138,7 @@ async function probeComfyModels(): Promise<void> {
   comfyModelsState.value = '探测中…'
   comfyModels.value = []
   try {
-    const res = await window.feather.imagegenModels()
+    const res = await window.dreamweave.imagegenModels()
     if (res.ok && res.models?.length) {
       comfyModels.value = res.models
       comfyModelsState.value = `✅ 发现 ${res.models.length} 个模型`
@@ -167,7 +167,7 @@ async function probeComfyModels(): Promise<void> {
 // ---------------------------------------------------------------- 音频 / 试听
 async function pickBgm(): Promise<void> {
   bgmState.value = ''
-  const res = await window.feather.pickBgm()
+  const res = await window.dreamweave.pickBgm()
   if (res.canceled) return
   if (!res.ok || !res.filePath) {
     bgmState.value = res.error ?? '选择失败'
@@ -185,7 +185,7 @@ function clearBgm(): void {
 async function testTts(): Promise<void> {
   ttsState.value = '合成中…'
   // 不传 voice → speak() 用当前「配音接入」选中的那组的 voice（拿不到则由端点默认）
-  const res = await window.feather.speak('StageView 配音试听。这是一段用于验证音频链路的文本。')
+  const res = await window.dreamweave.speak('StageView 配音试听。这是一段用于验证音频链路的文本。')
   if (!res.ok || !res.url) {
     ttsState.value = res.error ?? '合成失败'
     return
@@ -212,7 +212,7 @@ async function save(): Promise<void> {
     return
   }
   // 多组配置由各自的 ProviderListEditor 在每次变更时即时落盘；此处保存演出/音频/生图参数。
-  const res = await window.feather.saveSettings({
+  const res = await window.dreamweave.saveSettings({
     voiceVolume: voiceVolume.value,
     bgmPath: bgmPath.value,
     bgmVolume: bgmVolume.value,

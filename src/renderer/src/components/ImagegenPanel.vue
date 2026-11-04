@@ -45,7 +45,7 @@ async function probeModels(): Promise<void> {
   modelState.value = '探测中…'
   modelList.value = []
   try {
-    const res = await window.feather.imagegenModels()
+    const res = await window.dreamweave.imagegenModels()
     if (res.ok && res.models?.length) {
       modelList.value = res.models
       modelState.value = `发现 ${res.models.length} 个模型`
@@ -84,7 +84,7 @@ async function refreshTargets(): Promise<void> {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await window.feather.imagegenTargets(props.pkgId)
+    const res = await window.dreamweave.imagegenTargets(props.pkgId)
     if (!res.ok || !res.targets) {
       loadError.value = res.error ?? '读取生图目标失败'
       return
@@ -101,7 +101,7 @@ async function probe(): Promise<void> {
   probing.value = true
   probeState.value = '探活中…'
   try {
-    const res = await window.feather.imagegenProbe()
+    const res = await window.dreamweave.imagegenProbe()
     probeState.value = res.ok ? res.info ?? '已就绪' : res.error ?? '探活失败'
   } catch (e) {
     probeState.value = (e as Error).message
@@ -118,7 +118,7 @@ async function generate(kind: ImagegenKind, targetId: string, force: boolean): P
   const key = rowKey(kind, targetId)
   rowStates.value = { ...rowStates.value, [key]: { state: 'running' } }
   try {
-    const res = await window.feather.imagegenGenerate(props.pkgId, { kind, targetId, force })
+    const res = await window.dreamweave.imagegenGenerate(props.pkgId, { kind, targetId, force })
     if (!res.ok || !res.entryPath) {
       rowStates.value = { ...rowStates.value, [key]: { state: 'error', message: res.error ?? '生成失败' } }
       return false

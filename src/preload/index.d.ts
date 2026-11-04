@@ -1,8 +1,8 @@
-import type { FeatherApi } from './index'
+import type { DreamweaveApi } from './index'
 
 declare global {
   interface Window {
-    feather: FeatherApi
+    dreamweave: DreamweaveApi
   }
 }
 

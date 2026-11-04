@@ -27,7 +27,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const res = await window.feather.readSource()
+    const res = await window.dreamweave.readSource()
     if (!res.ok || !res.segments) {
       error.value = res.error ?? '读取原文失败'
       return

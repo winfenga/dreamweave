@@ -142,7 +142,7 @@ async function refresh(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const res = await window.feather.listWorkspaces()
+    const res = await window.dreamweave.listWorkspaces()
     if (!res.ok) {
       error.value = res.error ?? '读取书库失败'
       items.value = []
@@ -168,7 +168,7 @@ async function openBook(item: WorkspaceListItem): Promise<void> {
   error.value = ''
   try {
     // 按**目录名**打开（主键 = 目录名，不是 pkgId）
-    const res = await window.feather.openWorkspace(item.id)
+    const res = await window.dreamweave.openWorkspace(item.id)
     if (!res.ok || !res.summary) {
       error.value = res.error ?? '打开工作库失败'
       return
@@ -192,7 +192,7 @@ async function removeBook(id: string, title: string, root: string): Promise<void
   busyId.value = id
   error.value = ''
   try {
-    const res = await window.feather.deleteWorkspace(id)
+    const res = await window.dreamweave.deleteWorkspace(id)
     if (!res.ok) {
       error.value = res.error ?? '删除失败'
       return
@@ -217,7 +217,7 @@ async function exportBook(item: WorkspaceListItem): Promise<void> {
   error.value = ''
   exportNotice.value = ''
   try {
-    const res = await window.feather.exportT2w(item.id)
+    const res = await window.dreamweave.exportT2w(item.id)
     if (res.canceled) return
     if (!res.ok || !res.path) {
       error.value = res.error ?? '导出失败'
@@ -235,7 +235,7 @@ async function exportBook(item: WorkspaceListItem): Promise<void> {
 async function reveal(): Promise<void> {
   error.value = ''
   try {
-    const res = await window.feather.revealWorkspace()
+    const res = await window.dreamweave.revealWorkspace()
     if (!res.ok) error.value = res.error ?? '打开文件夹失败'
   } catch (e) {
     error.value = (e as Error).message

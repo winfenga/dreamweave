@@ -40,14 +40,14 @@ await send('Runtime.enable')
 // ---- 干净状态 + 导入 + 切到演出页 ----
 await send('Page.reload', { ignoreCache: false })
 await sleep(2500)
-console.log('[导入]', JSON.stringify(await ev(`(async()=>{const r=await window.feather.importPackage(${JSON.stringify(P)});
+console.log('[导入]', JSON.stringify(await ev(`(async()=>{const r=await window.dreamweave.importPackage(${JSON.stringify(P)});
   const i=document.querySelector('#app').__vue_app__._instance;
   i.setupState.summary=r.summary; i.setupState.view=null; i.setupState.viewError='';
   i.setupState.tab='stage';
-  const g=await window.feather.getView(); if(g.ok) i.setupState.view=g.data;
+  const g=await window.dreamweave.getView(); if(g.ok) i.setupState.view=g.data;
   return {ok:r.ok, verify:r.summary&&r.summary.verify};})()`)))
-await ev(`(async()=>{await window.feather.saveSettings({autoplayPolicy:'dubbing',dialogMode:'normal',stageZoom:1});
-  const s=await window.feather.getSettings();
+await ev(`(async()=>{await window.dreamweave.saveSettings({autoplayPolicy:'dubbing',dialogMode:'normal',stageZoom:1});
+  const s=await window.dreamweave.getSettings();
   document.querySelector('#app').__vue_app__._instance.setupState.settings=s; return s.autoplayPolicy})()`)
 await sleep(1200)
 

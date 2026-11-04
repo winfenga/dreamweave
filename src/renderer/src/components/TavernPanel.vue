@@ -66,13 +66,13 @@ async function scrollToBottom(): Promise<void> {
 
 /** 载入：设置 + 已有会话 + 若空则放开场白 */
 async function init(): Promise<void> {
-  const s = await window.feather.tavernGetSettings()
+  const s = await window.dreamweave.tavernGetSettings()
   settings.value = s
   if (s) {
     params.value = { ...s.params }
     useLorebook.value = s.useLorebook
   }
-  const r = await window.feather.cardGet(props.card.id)
+  const r = await window.dreamweave.cardGet(props.card.id)
   const session: TavernSession | null = r.session ?? null
   if (session?.messages?.length) {
     messages.value = session.messages
@@ -104,7 +104,7 @@ onMounted(() => {
 
 async function persist(): Promise<void> {
   try {
-    await window.feather.tavernSaveSession(props.card.id, messages.value, null)
+    await window.dreamweave.tavernSaveSession(props.card.id, messages.value, null)
   } catch {
     /* 保存失败不该打断对话 */
   }
@@ -122,7 +122,7 @@ async function send(): Promise<void> {
   generating.value = true
 
   try {
-    const r = await window.feather.tavernGenerate({
+    const r = await window.dreamweave.tavernGenerate({
       cardId: props.card.id,
       messages: messages.value,
       params: params.value,
@@ -171,7 +171,7 @@ async function regenerate(): Promise<void> {
   generating.value = true
   errorMsg.value = ''
   try {
-    const r = await window.feather.tavernGenerate({
+    const r = await window.dreamweave.tavernGenerate({
       cardId: props.card.id,
       messages: messages.value,
       params: params.value,
@@ -225,7 +225,7 @@ async function saveParams(): Promise<void> {
     replyCount: settings.value?.replyCount ?? 1
   }
   settings.value = next
-  await window.feather.tavernSaveSettings(next)
+  await window.dreamweave.tavernSaveSettings(next)
 }
 
 /** 滑杆值 ↔ null 语义：用户拖动即生效；有个单独的「默认」勾选可以置回 null（不发该字段） */

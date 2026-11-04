@@ -48,7 +48,7 @@ let unsubFs: (() => void) | null = null
 /** 顶栏全屏按钮：切换并按主进程确认后的真实状态回写 */
 async function toggleFullScreen(): Promise<void> {
   try {
-    const res = await window.feather.toggleFullScreen()
+    const res = await window.dreamweave.toggleFullScreen()
     if (res.ok) isFullScreen.value = res.fullScreen
   } catch {
     /* 全屏切换失败不弹错（非关键路径） */
@@ -59,7 +59,7 @@ const isSettingsTab = computed(() => tab.value === 'settings')
 
 async function loadSettings(): Promise<void> {
   try {
-    settings.value = await window.feather.getSettings()
+    settings.value = await window.dreamweave.getSettings()
   } catch {
     settings.value = null
   }
@@ -80,13 +80,13 @@ onMounted(() => {
   }
   void loadSettings()
   // 首帧对齐全屏真实状态 + 订阅系统侧变化（F11/系统菜单）
-  void window.feather
+  void window.dreamweave
     .getFullScreen()
     .then((on) => {
       isFullScreen.value = on
     })
     .catch(() => {})
-  unsubFs = window.feather.onFullScreenChanged((on) => {
+  unsubFs = window.dreamweave.onFullScreenChanged((on) => {
     isFullScreen.value = on
   })
 })
@@ -111,7 +111,7 @@ async function ensureView(): Promise<void> {
   viewLoading.value = true
   viewError.value = ''
   try {
-    const res = await window.feather.getView()
+    const res = await window.dreamweave.getView()
     if (!res.ok || !res.data) {
       viewError.value = res.error ?? '渲染模型加载失败'
       return
@@ -130,7 +130,7 @@ async function reloadView(): Promise<void> {
   viewError.value = ''
   viewLoading.value = true
   try {
-    const res = await window.feather.getView()
+    const res = await window.dreamweave.getView()
     if (!res.ok || !res.data) {
       viewError.value = res.error ?? '渲染模型加载失败'
       return
@@ -188,7 +188,7 @@ async function doImport(kind: 't2w' | 'txt' = 't2w'): Promise<void> {
   error.value = ''
   loading.value = true
   try {
-    const res = await window.feather.importPackage(undefined, kind)
+    const res = await window.dreamweave.importPackage(undefined, kind)
     if (res.canceled) return
     if (!res.ok || !res.summary) {
       error.value = res.error ?? '导入失败'

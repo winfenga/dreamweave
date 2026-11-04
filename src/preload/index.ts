@@ -320,6 +320,6 @@ const api = {
     ipcRenderer.invoke('mangaProduction:saveMusic', toPlainData(input))
 }
 
-export type FeatherApi = typeof api
+export type DreamweaveApi = typeof api
 
-contextBridge.exposeInMainWorld('feather', api)
+contextBridge.exposeInMainWorld('dreamweave', api)

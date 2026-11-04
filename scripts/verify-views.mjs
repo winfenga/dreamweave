@@ -93,7 +93,7 @@ const P = process.argv[2] ?? 'D:/aaaTemp/基督山伯爵 · 前十章｜归航�
 console.log('\n=== 1) 导入（并把结果注入 App 状态，等价于点了「导入」按钮后的界面） ===')
 console.log(
   JSON.stringify(
-    await ev(`(async()=>{const r=await window.feather.importPackage(${JSON.stringify(P)});
+    await ev(`(async()=>{const r=await window.dreamweave.importPackage(${JSON.stringify(P)});
       const i=document.querySelector('#app').__vue_app__._instance;
       i.setupState.summary=r.summary; i.setupState.view=null; i.setupState.viewError='';
       return {ok:r.ok,title:r.summary&&r.summary.project.title,verify:r.summary&&r.summary.verify};})()`)
@@ -108,7 +108,7 @@ console.log('\n=== 2) getView() 渲染模型 ===')
 console.log(
   JSON.stringify(
     await ev(`(async()=>{
-      const r=await window.feather.getView(); if(!r.ok) return {ok:false,error:r.error};
+      const r=await window.dreamweave.getView(); if(!r.ok) return {ok:false,error:r.error};
       const d=r.data; const tc=(n)=>1+n.children.reduce((s,c)=>s+tc(c),0);
       return {ok:true, assetBase:d.assetBase, protocol:d.protocol,
         treeNodeCount: tc(d.mapRoot), flatLocations: d.mapNodes.length, stats: d.stats,
@@ -125,7 +125,7 @@ console.log(
 const ensureView = () =>
   ev(`(async()=>{const i=document.querySelector('#app').__vue_app__._instance;
     if(i.setupState.view) return 'already';
-    const r=await window.feather.getView(); if(!r.ok) return 'fail:'+r.error;
+    const r=await window.dreamweave.getView(); if(!r.ok) return 'fail:'+r.error;
     i.setupState.view=r.data; return 'loaded';})()`)
 
 console.log('\n=== 3) 地图互动视图 ===')
@@ -403,7 +403,7 @@ console.log('\n=== 5) t2w:// 全量图片解码 ===')
 console.log(
   JSON.stringify(
     await ev(`(async()=>{
-      const r=await window.feather.getView(); const d=r.data;
+      const r=await window.dreamweave.getView(); const d=r.data;
       const urls=[...d.scenes.map(s=>s.imageUrl).filter(Boolean), ...d.characters.map(c=>c.imageUrl).filter(Boolean)];
       const uniq=[...new Set(urls)];
       const dec=(u)=>new Promise(ok=>{const im=new Image(); im.onload=()=>ok({ok:true,w:im.naturalWidth,h:im.naturalHeight});
@@ -418,7 +418,7 @@ console.log('=== 6) t2w:// 响应头 ===')
 console.log(
   JSON.stringify(
     await ev(`(async()=>{
-      const r=await window.feather.getView(); const u=r.data.scenes[0].imageUrl;
+      const r=await window.dreamweave.getView(); const u=r.data.scenes[0].imageUrl;
       const res=await fetch(u); const buf=await res.arrayBuffer();
       const b=new Uint8Array(buf.slice(0,8));
       return {url:u, status:res.status, contentType:res.headers.get('content-type'),

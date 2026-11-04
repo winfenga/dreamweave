@@ -62,7 +62,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const r = await window.feather.cardList()
+    const r = await window.dreamweave.cardList()
     if (!r.ok || !r.items) {
       error.value = r.error ?? '角色卡加载失败'
       items.value = []
@@ -84,7 +84,7 @@ async function pick(id: string): Promise<void> {
   detail.value = null
   lorebook.value = []
   try {
-    const r = await window.feather.cardGet(id)
+    const r = await window.dreamweave.cardGet(id)
     if (!r.ok || !r.card) {
       error.value = r.error ?? '读取角色卡失败'
       return
@@ -108,7 +108,7 @@ async function doExport(format: CardExportFormat): Promise<void> {
   exportMsg.value = ''
   exportErr.value = ''
   try {
-    const r = await window.feather.cardExport({
+    const r = await window.dreamweave.cardExport({
       cardIds: [detail.value.id],
       format,
       portraitAppearanceId: format === 'png' ? exportPortrait.value : undefined

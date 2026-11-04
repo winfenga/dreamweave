@@ -47,7 +47,7 @@ console.log('visibility:', await ev('document.visibilityState'))
 console.log(
   '\n[导入]',
   JSON.stringify(
-    await ev(`(async()=>{const r=await window.feather.importPackage(${JSON.stringify(P)});
+    await ev(`(async()=>{const r=await window.dreamweave.importPackage(${JSON.stringify(P)});
       const i=document.querySelector('#app').__vue_app__._instance;
       i.setupState.summary=r.summary; i.setupState.view=null; i.setupState.viewError='';
       return {ok:r.ok,title:r.summary&&r.summary.project.title,verify:r.summary&&r.summary.verify};})()`)
@@ -74,15 +74,15 @@ console.log(
 // 3) TTS 未配置 → 应返回可读错误且不发请求
 console.log(
   '[TTS 未配置]',
-  JSON.stringify(await ev(`(async()=>{const r=await window.feather.speak('测试一句话'); return {ok:r.ok,error:r.error};})()`))
+  JSON.stringify(await ev(`(async()=>{const r=await window.dreamweave.speak('测试一句话'); return {ok:r.ok,error:r.error};})()`))
 )
 
 // 4) 保存设置（dialogMode=transparent + zoom=1.3 + tts 策略）
 console.log(
   '[保存设置]',
   JSON.stringify(
-    await ev(`(async()=>{const r=await window.feather.saveSettings({dialogMode:'transparent',stageZoom:1.3,autoplayPolicy:'tts',ttsVoice:'中性旁白'});
-      const s=await window.feather.getSettings();
+    await ev(`(async()=>{const r=await window.dreamweave.saveSettings({dialogMode:'transparent',stageZoom:1.3,autoplayPolicy:'tts',ttsVoice:'中性旁白'});
+      const s=await window.dreamweave.getSettings();
       return {ok:r.ok, dialogMode:s.dialogMode, stageZoom:s.stageZoom, policy:s.autoplayPolicy, voiceVolume:s.voiceVolume, bgmVolume:s.bgmVolume, roleColors:s.roleColors};})()`)
   )
 )
@@ -92,7 +92,7 @@ await sleep(400)
 // 5) 演出视图
 await ev(`(()=>{const i=document.querySelector('#app').__vue_app__._instance; i.setupState.tab='stage'; return true})()`)
 console.log('ensureView:', await ev(`(async()=>{const i=document.querySelector('#app').__vue_app__._instance;
-  if(i.setupState.view) return 'already'; const r=await window.feather.getView(); if(!r.ok) return 'fail:'+r.error;
+  if(i.setupState.view) return 'already'; const r=await window.dreamweave.getView(); if(!r.ok) return 'fail:'+r.error;
   i.setupState.view=r.data; return 'loaded';})()`))
 await sleep(1500)
 

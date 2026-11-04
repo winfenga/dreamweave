@@ -119,9 +119,9 @@ mark('准备')
  */
 const ensure = await ev(`(async () => {
   const uiOpen = [...document.querySelectorAll('.side-item')].some(b => b.textContent.includes('漫画阅读'))
-  const mv = await window.feather.getMangaView()
+  const mv = await window.dreamweave.getMangaView()
   if (mv.ok && mv.data?.dubbing?.length && uiOpen) return { ok: true, reused: true }
-  const imp = await window.feather.importPackage('D:/galcomic/gmzz-10.t2w', 't2w')
+  const imp = await window.dreamweave.importPackage('D:/galcomic/gmzz-10.t2w', 't2w')
   if (!imp.ok) return { ok: false, err: imp.error }
   return { ok: true, reused: false, title: imp.summary?.project?.title ?? '' }
 })()`)
@@ -132,7 +132,7 @@ if (!ensure?.reused) {
   await sleep(2800)
   await send('Page.bringToFront')
   await ev("window.__pkg = \"D:/galcomic/gmzz-10.t2w\"; true")
-const opened = await ev("(async () => {\nconst ws = await window.feather.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.feather.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
+const opened = await ev("(async () => {\nconst ws = await window.dreamweave.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.dreamweave.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
   check('打开漫画书', opened?.ok, opened?.why ?? '')
   await sleep(1600)
 }
@@ -142,7 +142,7 @@ await sleep(1400)
 // ============ ① 数据层 ============
 mark('数据层')
 const data = await ev(`(async () => {
-  const p = await window.feather.mangaProductionPage(1, 1)
+  const p = await window.dreamweave.mangaProductionPage(1, 1)
   if (!p.ok) return { ok: false, error: p.error }
   const lb = p.lorebook
   if (!lb) return { ok: false, error: '没有 lorebook 字段' }

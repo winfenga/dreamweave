@@ -104,7 +104,7 @@ await send('Page.bringToFront')
 
 const PKG = argv.find((a) => !a.startsWith('--') && a.endsWith('.t2w')) ?? 'D:/galcomic/dreamweave/testdata/monte-cristo-10ch.t2w'
 const imported = await ev(`(async () => {
-  const r = await window.feather.importPackage(${JSON.stringify(PKG)}, 't2w')
+  const r = await window.dreamweave.importPackage(${JSON.stringify(PKG)}, 't2w')
   return { ok: r.ok, error: r.error, title: r.summary?.project?.title, chars: r.summary?.project?.charCount }
 })()`)
 check('导入书籍', imported?.ok, imported?.error ?? '')
@@ -115,7 +115,7 @@ runtimeErrors.length = 0
 await send('Page.bringToFront')
 
 await ev(`window.__pkg = ${JSON.stringify(PKG)}; true`)
-const opened = await ev("(async () => {\nconst ws = await window.feather.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.feather.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
+const opened = await ev("(async () => {\nconst ws = await window.dreamweave.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.dreamweave.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
 check('书库中点开这本书', opened?.ok, opened?.why ?? '')
 await sleep(1500)
 
@@ -131,7 +131,7 @@ const listInfo = await ev(`(async () => {
   const items = [...document.querySelectorAll('.cc-item')]
   const meta = document.querySelector('.cc-list-meta')?.textContent?.trim() ?? ''
   // 同时读 IPC 真值，避免只验证 UI
-  const r = await window.feather.cardList()
+  const r = await window.dreamweave.cardList()
   return {
     uiCount: items.length,
     meta,
@@ -155,7 +155,7 @@ const detailInfo = await ev(`(async () => {
   if (!first) return { ok: false, why: '没有列表项' }
   first.click()
   await new Promise(r => setTimeout(r, 900))
-  const d = await window.feather.cardGet(first.getAttribute('data-testid')?.replace('card-item-', '') ?? '')
+  const d = await window.dreamweave.cardGet(first.getAttribute('data-testid')?.replace('card-item-', '') ?? '')
   return {
     ok: d.ok,
     err: d.error,
@@ -222,15 +222,15 @@ check('立绘走 dwe:// 协议', (imgOk?.src ?? '').startsWith('dwe://'), imgOk?
 // ============ ④ 关系双向 ============
 mark('关系双向');
 const relInfo = await ev(`(async () => {
-  const r = await window.feather.cardList()
+  const r = await window.dreamweave.cardList()
   // 找一个有关系的人，再确认关系也出现在对方的关系里（A/B 两侧都收）
   const withRel = (r.items ?? []).filter(x => x.relationCount > 0)
   if (withRel.length < 2) return { ok: false, why: '有关系的人不足 2' }
   const a = withRel[0]
-  const d = await window.feather.cardGet(a.id)
+  const d = await window.dreamweave.cardGet(a.id)
   const other = d.card?.relations?.[0]?.otherCharacterId
   if (!other) return { ok: false, why: '关系里没有对方 id' }
-  const d2 = await window.feather.cardGet(other)
+  const d2 = await window.dreamweave.cardGet(other)
   const back = (d2.card?.relations ?? []).some(x => x.otherCharacterId === a.id)
   return { ok: true, a: a.name, other: d2.card?.name, back }
 })()`)
@@ -239,10 +239,10 @@ check('关系是双向收集的（A↔B 两侧都有）', relInfo?.ok === true &
 // ============ ⑤ 导出 JSON ============
 mark('导出 JSON');
 const jsonExport = await ev(`(async () => {
-  const r = await window.feather.cardList()
+  const r = await window.dreamweave.cardList()
   const id = r.items?.[0]?.id
   if (!id) return { ok: false, why: '没有角色' }
-  const res = await window.feather.cardExport({ cardIds: [id], format: 'json', outDir: ${JSON.stringify(OUT_DIR)} })
+  const res = await window.dreamweave.cardExport({ cardIds: [id], format: 'json', outDir: ${JSON.stringify(OUT_DIR)} })
   return { ok: res.ok, err: res.error, paths: res.paths ?? [], skipped: res.skipped ?? [] }
 })()`)
 check('JSON 导出成功', jsonExport?.ok === true, jsonExport?.err ?? JSON.stringify(jsonExport?.skipped))
@@ -261,12 +261,12 @@ if (jsonExport?.paths?.length) {
 // ============ ⑥ 导出 PNG 并读回 ============
 mark('导出 PNG');
 const pngExport = await ev(`(async () => {
-  const r = await window.feather.cardList()
+  const r = await window.dreamweave.cardList()
   // 挑一个**有立绘**的角色，才能真正验证「立绘 + tEXt」
   const withImg = (r.items ?? []).find(x => x.avatarUrl)
   const id = withImg?.id ?? r.items?.[0]?.id
   if (!id) return { ok: false, why: '没有角色' }
-  const res = await window.feather.cardExport({ cardIds: [id], format: 'png', outDir: ${JSON.stringify(OUT_DIR)} })
+  const res = await window.dreamweave.cardExport({ cardIds: [id], format: 'png', outDir: ${JSON.stringify(OUT_DIR)} })
   return { ok: res.ok, err: res.error, paths: res.paths ?? [], skipped: res.skipped ?? [], id, name: withImg?.name }
 })()`)
 check('PNG 导出成功', pngExport?.ok === true, pngExport?.err ?? JSON.stringify(pngExport?.skipped))
@@ -315,7 +315,7 @@ const tvInfo = await ev(`(async () => {
   if (!root) return { ok: false, why: '酒馆未挂载' }
   const msgs = [...root.querySelectorAll('.tv-msg')]
   const first = msgs[0]?.querySelector('.tv-msg-body')?.textContent?.trim() ?? ''
-  const s = await window.feather.tavernGetSettings()
+  const s = await window.dreamweave.tavernGetSettings()
   return {
     ok: true,
     msgCount: msgs.length,
@@ -368,14 +368,14 @@ mark('真机生成');
 await ev(`document.querySelector('[data-testid="tv-toggle-params"]')?.click()`)
 await sleep(300)
 const gen = await ev(`(async () => {
-  const s = await window.feather.getSettings()
+  const s = await window.dreamweave.getSettings()
   const p = (s.llm || []).find(x => x.id === s.activeLlmId) || (s.llm || [])[0]
   if (!p) return { skipped: '未配置模型' }
-  const r = await window.feather.cardList()
+  const r = await window.dreamweave.cardList()
   const id = (r.items ?? [])[0]?.id
   if (!id) return { skipped: '没有角色' }
   const t0 = Date.now()
-  const res = await window.feather.tavernGenerate({
+  const res = await window.dreamweave.tavernGenerate({
     cardId: id,
     messages: [{ id: 'u1', role: 'user', content: '你好，你是谁？', at: Date.now() }],
     params: { temperature: 0.8, topP: 0.95, topK: null, frequencyPenalty: 0.2, presencePenalty: 0.2, repetitionPenalty: null, maxTokens: 300, stop: [], seed: null },

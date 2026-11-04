@@ -634,9 +634,9 @@ watch(chIdx, () => nextTick(syncBgm))
 const weEnteredFullScreen = ref(false)
 async function enterWindowFullScreen(): Promise<void> {
   try {
-    const before = await window.feather.getFullScreen()
+    const before = await window.dreamweave.getFullScreen()
     if (before) return
-    const r = await window.feather.setFullScreen(true)
+    const r = await window.dreamweave.setFullScreen(true)
     weEnteredFullScreen.value = r.ok && r.fullScreen
   } catch {
     /* 全屏失败不影响阅读 */
@@ -646,7 +646,7 @@ async function restoreWindowFullScreen(): Promise<void> {
   if (!weEnteredFullScreen.value) return
   weEnteredFullScreen.value = false
   try {
-    await window.feather.setFullScreen(false)
+    await window.dreamweave.setFullScreen(false)
   } catch {
     /* 忽略 */
   }

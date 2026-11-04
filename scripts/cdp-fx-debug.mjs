@@ -33,5 +33,5 @@ console.log('当前句角色:', await ev(`(() => {
 
 console.log('舞台立绘 img 存在?', await ev(`!!document.querySelector('.stage-portrait img') || !!document.querySelector('.portrait img')`))
 console.log('所有 img src 前缀:', await ev(`[...document.querySelectorAll('.stage-wrap img')].map(i=>({cls:i.className, src:(i.src||'').slice(0,60)}))`))
-console.log('角色数:', await ev(`(async()=>{ const r = await window.feather.getView(); return r.ok? {chars:r.data.characters.length, withImg:r.data.characters.filter(c=>c.imageUrl).length, sample:r.data.characters.slice(0,3).map(c=>({id:c.id,name:c.name,img:!!c.imageUrl}))}:r.error })()`))
+console.log('角色数:', await ev(`(async()=>{ const r = await window.dreamweave.getView(); return r.ok? {chars:r.data.characters.length, withImg:r.data.characters.filter(c=>c.imageUrl).length, sample:r.data.characters.slice(0,3).map(c=>({id:c.id,name:c.name,img:!!c.imageUrl}))}:r.error })()`))
 ws.close()

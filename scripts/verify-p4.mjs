@@ -77,7 +77,7 @@ const normPath = (p) => String(p ?? '').replace(/\\/g, '/').replace(/\/+$/, '')
  */
 async function resolveWorkspaceRoot() {
   const raw = await ev(`(async()=>{
-    var r = await window.feather.listWorkspaces()
+    var r = await window.dreamweave.listWorkspaces()
     return JSON.stringify((r.items || []).filter(function (i) { return i.current }).map(function (i) { return i.root }))
   })()`)
   let roots = []
@@ -272,7 +272,7 @@ console.log('测试包:', PKG, (originalSize / 1048576).toFixed(1) + 'MB')
 // ---------------------------------------------------------------- ① 导入
 section('① 导入测试包副本')
 const imp = await ev(`(async()=>{
-  const r = await window.feather.importPackage(${JSON.stringify(PKG)})
+  const r = await window.dreamweave.importPackage(${JSON.stringify(PKG)})
   if (!r.ok) return r
   const i = document.querySelector('#app').__vue_app__._instance
   i.setupState.summary = r.summary
@@ -517,7 +517,7 @@ const shardHashBefore = await shardHashes()
 const pkgHashBefore = sha256File(PKG)
 const backupsBefore = countBackups()
 const miss = await ev(`(async () => {
-  const r = await window.feather.saveEffects({ sentence: { chapterSeq: 999999, order: 999999, type: 'no-such-type', effects: [{ effectId: '${FX_OVERLAY}', source: 'manual' }] } })
+  const r = await window.dreamweave.saveEffects({ sentence: { chapterSeq: 999999, order: 999999, type: 'no-such-type', effects: [{ effectId: '${FX_OVERLAY}', source: 'manual' }] } })
   return { ok: r.ok, error: r.error || '' }
 })()`)
 check('三元键未命中：返回可读错误', miss.ok === false && /没有定位到/.test(miss.error), miss.error.slice(0, 80))
@@ -666,7 +666,7 @@ const fxTriplet = [
   { effectId: rangeFxId, source: 'manual' }
 ]
 await ev(`(async () => {
-  await window.feather.saveEffects({
+  await window.dreamweave.saveEffects({
     sentence: { chapterSeq: ${target.chapterSeq}, order: ${target.order}, type: ${JSON.stringify(target.type)}, effects: ${JSON.stringify(fxTriplet)} }
   })
   return true
@@ -730,23 +730,23 @@ async function remountFxBlock() {
 }
 // (a) 夹具：临时构造「无可用 provider」→ 未配分支（禁用 + 可读提示 + suggestEffects 不发请求即报错）。
 const providerSnapshot = await ev(`(async () => {
-  const ps = await window.feather.getProviders()
+  const ps = await window.dreamweave.getProviders()
   return { llm: ps.llm || [], tts: ps.tts || [], activeLlmId: ps.activeLlmId, activeTtsId: ps.activeTtsId, fallbackChain: ps.fallbackChain || [] }
 })()`)
-await ev(`(async () => { await window.feather.saveProviders({ llm: [], tts: [], activeLlmId: '', activeTtsId: '', fallbackChain: [] }); return true })()`)
+await ev(`(async () => { await window.dreamweave.saveProviders({ llm: [], tts: [], activeLlmId: '', activeTtsId: '', fallbackChain: [] }); return true })()`)
 await remountFxBlock()
 const fxAiDisabled = await ev(`!!document.querySelector('[data-testid=se-fx-ai]').disabled`)
 const fxAiTitle = await ev(`document.querySelector('[data-testid=se-fx-ai]').getAttribute('title') || ''`)
 check('未配模型（夹具）：AI 按钮禁用', fxAiDisabled)
 check('未配模型（夹具）：给出可读提示', /未配置模型接入/.test(fxAiTitle), fxAiTitle.slice(0, 80))
-const fxAiSug = await ev(`(async () => { const r = await window.feather.suggestEffects({ text: '测试' }); return { ok: r.ok, error: r.error } })()`)
+const fxAiSug = await ev(`(async () => { const r = await window.dreamweave.suggestEffects({ text: '测试' }); return { ok: r.ok, error: r.error } })()`)
 check('未配模型（夹具）：suggestEffects 立即返回可读错误（不发请求）', !!fxAiSug && fxAiSug.ok === false && /未配置模型接入/.test(fxAiSug.error ?? ''), (fxAiSug && fxAiSug.error) || '')
 // 无论上面结果如何都还原真实 provider，避免污染后续章节
-await ev(`(async () => { await window.feather.saveProviders(${JSON.stringify(providerSnapshot)}); return true })()`)
+await ev(`(async () => { await window.dreamweave.saveProviders(${JSON.stringify(providerSnapshot)}); return true })()`)
 await remountFxBlock()
 // (b) 真源判定 → 「已配 → 挂载+撤销」分支。
 const settings = await ev(`(async () => {
-  const ps = await window.feather.getProviders()
+  const ps = await window.dreamweave.getProviders()
   const l = ps.llm || []
   const a = l.find(p => p.id === ps.activeLlmId) || l.find(p => p.enabled) || l[0]
   return { ready: !!(a && a.enabled && a.baseURL && a.apiKey && a.model) }
@@ -756,7 +756,7 @@ if (!settings.ready) {
   const title = await ev(`document.querySelector('[data-testid=se-fx-ai]').getAttribute('title') || ''`)
   check('未配模型：AI 按钮禁用', aiDisabled)
   check('未配模型：给出可读提示', /未配置模型接入/.test(title), title.slice(0, 80))
-  const sug = await ev(`(async () => { const r = await window.feather.suggestEffects({ text: '测试' }); return { ok: r.ok, error: r.error } })()`)
+  const sug = await ev(`(async () => { const r = await window.dreamweave.suggestEffects({ text: '测试' }); return { ok: r.ok, error: r.error } })()`)
   check('未配模型：suggestEffects 立即返回可读错误（不发请求）', !!sug && sug.ok === false && /未配置模型接入/.test(sug.error ?? ''), (sug && sug.error) || '')
 } else {
   const before = await ev(`Number(document.querySelector('[data-testid=se-fx-count]').textContent)`)

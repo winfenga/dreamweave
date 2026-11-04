@@ -88,7 +88,7 @@ await send('Page.bringToFront')
 
 const PKG = argv.find((a) => !a.startsWith('--') && a.endsWith('.t2w')) ?? 'D:/galcomic/gmzz-10.t2w'
 const imported = await ev(`(async () => {
-  const r = await window.feather.importPackage(${JSON.stringify(PKG)}, 't2w')
+  const r = await window.dreamweave.importPackage(${JSON.stringify(PKG)}, 't2w')
   return { ok: r.ok, error: r.error, title: r.summary?.project?.title }
 })()`)
 check('导入漫画包', imported?.ok, imported?.error ?? '')
@@ -99,7 +99,7 @@ runtimeErrors.length = 0
 await send('Page.bringToFront')
 
 await ev(`window.__pkg = ${JSON.stringify(PKG)}; true`)
-await ev("(async () => {\nconst ws = await window.feather.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.feather.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
+await ev("(async () => {\nconst ws = await window.dreamweave.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.dreamweave.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
 await sleep(1500)
 
 await ev(`(() => {
@@ -148,7 +148,7 @@ check('每段有试听按钮', (dub?.plays ?? 0) === (dub?.segCount ?? 0), `${du
 
 // 通过 IPC 对照真实数据
 const ipcPage = await ev(`(async () => {
-  const r = await window.feather.mangaProductionPage(1, 1)
+  const r = await window.dreamweave.mangaProductionPage(1, 1)
   if (!r.ok) return { ok: false, error: r.error }
   const p = r.page
   return {
@@ -297,7 +297,7 @@ check('有保存按钮', voices?.hasSave === true, '')
 
 // 读 IPC 音色真值
 const ipcVoices = await ev(`(async () => {
-  const r = await window.feather.mangaProductionPage(1, 1)
+  const r = await window.dreamweave.mangaProductionPage(1, 1)
   if (!r.ok) return { ok: false }
   return { ok: true, count: r.voices.length, narr: r.voices.filter(v => v.isNarrator).length, ids: r.voices.map(v => v.characterId) }
 })()`)
@@ -308,23 +308,23 @@ check('音色含 $narrator', (ipcVoices?.ids ?? []).includes('$narrator'), JSON.
 // ============ ⑤ 音色写回（真写 + 回读 + 快照还原）============
 mark('音色写回')
 const voiceWrite = await ev(`(async () => {
-  const r0 = await window.feather.mangaProductionPage(1, 1)
+  const r0 = await window.dreamweave.mangaProductionPage(1, 1)
   const before = r0.voices.find(v => v.isNarrator)
   if (!before) return { skipped: '本页没有旁白，无法测试音色写回' }
   // 快照：无条件还原的依据（不依赖读端正确性）
   const snapshot = { vt: before.vt || 'androgynous', vi: before.vi || '' }
   const marker = '测试音色描述-' + Date.now()
-  const w = await window.feather.mangaProductionSaveVoice({
+  const w = await window.dreamweave.mangaProductionSaveVoice({
     characterId: '$narrator', vt: 'androgynous', vi: marker, isNarrator: true
   })
   if (!w.ok) return { ok: false, error: w.error, snapshot }
-  const r1 = await window.feather.mangaProductionPage(1, 1)
+  const r1 = await window.dreamweave.mangaProductionPage(1, 1)
   const afterVi = r1.voices.find(v => v.isNarrator)?.vi ?? ''
   // 用快照还原
-  const w2 = await window.feather.mangaProductionSaveVoice({
+  const w2 = await window.dreamweave.mangaProductionSaveVoice({
     characterId: '$narrator', vt: snapshot.vt, vi: snapshot.vi, isNarrator: true
   })
-  const r2 = await window.feather.mangaProductionPage(1, 1)
+  const r2 = await window.dreamweave.mangaProductionPage(1, 1)
   return {
     ok: w2.ok,
     marker,
@@ -352,7 +352,7 @@ mark('配乐换曲')
  * 教训：测试的清理路径不能依赖被测代码的正确性。
  */
 const musicWrite = await ev(`(async () => {
-  const r0 = await window.feather.mangaProductionPage(1, 1)
+  const r0 = await window.dreamweave.mangaProductionPage(1, 1)
   const cur = r0.music.current
   if (!cur) return { skipped: '本章没有配乐，无法测试换曲' }
   // 快照：完整拷贝一份原始 track（含所有字段），用于无条件还原
@@ -370,14 +370,14 @@ const musicWrite = await ev(`(async () => {
     licenseId: 'CC0-1.0',
     attribution: 'visual verification only'
   }
-  const w = await window.feather.mangaProductionSaveMusic({ chapterSeq: 1, track: fake })
+  const w = await window.dreamweave.mangaProductionSaveMusic({ chapterSeq: 1, track: fake })
   if (!w.ok) return { ok: false, error: w.error, snapshot }
-  const r1 = await window.feather.mangaProductionPage(1, 1)
+  const r1 = await window.dreamweave.mangaProductionPage(1, 1)
   const afterTitle = r1.music.current?.title ?? ''
   const afterAttr = r1.music.current?.attribution ?? ''
   // 无条件还原（用快照，不看当前读到的值）
-  const w2 = await window.feather.mangaProductionSaveMusic({ chapterSeq: 1, track: snapshot })
-  const r2 = await window.feather.mangaProductionPage(1, 1)
+  const w2 = await window.dreamweave.mangaProductionSaveMusic({ chapterSeq: 1, track: snapshot })
+  const r2 = await window.dreamweave.mangaProductionPage(1, 1)
   return {
     ok: w2.ok,
     afterTitle,

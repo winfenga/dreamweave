@@ -39,12 +39,12 @@ await send('Page.reload', { ignoreCache: false })
 await sleep(2500)
 await send('Page.bringToFront')
 await sleep(500)
-console.log('[导入]', JSON.stringify(await ev(`(async()=>{const r=await window.feather.importPackage(${JSON.stringify(P)});
+console.log('[导入]', JSON.stringify(await ev(`(async()=>{const r=await window.dreamweave.importPackage(${JSON.stringify(P)});
   const i=document.querySelector('#app').__vue_app__._instance;
   i.setupState.summary=r.summary; i.setupState.view=null; i.setupState.viewError='';
   return {ok:r.ok,verify:r.summary&&r.summary.verify};})()`)))
 
-console.log('[设置] policy=dubbing', JSON.stringify(await ev(`(async()=>{const r=await window.feather.saveSettings({autoplayPolicy:'dubbing',dialogMode:'normal',stageZoom:1}); const s=await window.feather.getSettings(); return {ok:r.ok,policy:s.autoplayPolicy};})()`)))
+console.log('[设置] policy=dubbing', JSON.stringify(await ev(`(async()=>{const r=await window.dreamweave.saveSettings({autoplayPolicy:'dubbing',dialogMode:'normal',stageZoom:1}); const s=await window.dreamweave.getSettings(); return {ok:r.ok,policy:s.autoplayPolicy};})()`)))
 await sleep(400)
 
 // mp3 直播放验证（干净页面，用户手势已由 click 提供）
@@ -52,7 +52,7 @@ console.log(
   '[mp3 直播放]',
   JSON.stringify(
     await ev(`(async()=>{
-      const r=await window.feather.getView(); const d=r.data;
+      const r=await window.dreamweave.getView(); const d=r.data;
       if(!d.dubbing.length) return {note:'无配音'};
       const u=d.dubbing[0].url;
       // 1) Range fetch（带 CORS 头后应放行）

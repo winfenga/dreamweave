@@ -9,7 +9,7 @@ let cache: Promise<EffectCatalogResult> | null = null
 /** 拉取特效目录（单例缓存；IPC 异常降级为可读错误对象，不抛出） */
 export function loadCatalog(): Promise<EffectCatalogResult> {
   if (!cache) {
-    cache = window.feather
+    cache = window.dreamweave
       .getEffectCatalog()
       .catch((e): EffectCatalogResult => ({ ok: false, error: (e as Error).message }))
   }

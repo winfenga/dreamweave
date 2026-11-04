@@ -72,7 +72,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const r = await window.feather.mangaProductionPage(props.chapterSeq, props.pageNo)
+    const r = await window.dreamweave.mangaProductionPage(props.chapterSeq, props.pageNo)
     if (!r.ok) {
       error.value = r.error ?? '编排数据加载失败'
       return
@@ -180,7 +180,7 @@ async function redubAll(): Promise<void> {
       const d = voiceDraft.value[v.characterId]
       if (d?.vi) map[v.characterId] = d.vi
     }
-    const r = await window.feather.mangaProductionRedub(p.chapterSeq, p.pageNo, map)
+    const r = await window.dreamweave.mangaProductionRedub(p.chapterSeq, p.pageNo, map)
     if (!r.ok) {
       redubErr.value = r.error ?? '重新配音失败'
       redubMsg.value = ''
@@ -204,7 +204,7 @@ async function saveVoice(v: PageVoiceCard): Promise<void> {
   savingVoice.value = v.characterId
   voiceMsg.value = ''
   try {
-    const r = await window.feather.mangaProductionSaveVoice({
+    const r = await window.dreamweave.mangaProductionSaveVoice({
       characterId: v.characterId,
       vt: d.vt,
       vi: d.vi,
@@ -231,7 +231,7 @@ async function pickMusic(c: ChapterMusicCard['candidates'][number]): Promise<voi
   savingMusic.value = true
   musicMsg.value = ''
   try {
-    const r = await window.feather.mangaProductionSaveMusic({
+    const r = await window.dreamweave.mangaProductionSaveMusic({
       chapterSeq: m.chapterSeq,
       track: {
         id: c.id,

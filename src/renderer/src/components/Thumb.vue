@@ -21,7 +21,7 @@ async function load(): Promise<void> {
   started = true
   loading.value = true
   try {
-    const res = await window.feather.previewEntry(props.filePath, props.entryPath)
+    const res = await window.dreamweave.previewEntry(props.filePath, props.entryPath)
     if (res.ok && res.dataUrl) url.value = res.dataUrl
     else failed.value = true
   } catch {

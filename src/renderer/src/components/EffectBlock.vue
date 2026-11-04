@@ -77,7 +77,7 @@ onMounted(async () => {
   try {
     // Step1 收敛后：模型配置唯一真源 = llm[] + activeLlmId（与 suggestEffects 的判据保持一致，
     // 消除"AI 按钮判据读旧三框、实际请求读 llm[]"的两套配置错位）。
-    const ps = await window.feather.getProviders()
+    const ps = await window.dreamweave.getProviders()
     const list = ps.llm ?? []
     const act = list.find((p) => p.id === ps.activeLlmId) ?? list.find((p) => p.enabled) ?? list[0]
     modelReady.value = !!(act && act.enabled && act.baseURL.trim() && act.apiKey.trim() && act.model.trim())
@@ -90,7 +90,7 @@ onMounted(async () => {
 async function writeSentence(effects: EffectMount[]): Promise<boolean> {
   busy.value = true
   try {
-    const res = await window.feather.saveEffects({
+    const res = await window.dreamweave.saveEffects({
       sentence: {
         chapterSeq: props.action.chapterSeq,
         order: props.action.order,
@@ -121,7 +121,7 @@ async function writeSentence(effects: EffectMount[]): Promise<boolean> {
 async function writeRanges(next: EffectRange[]): Promise<boolean> {
   busy.value = true
   try {
-    const res = await window.feather.saveEffects({ ranges: next })
+    const res = await window.dreamweave.saveEffects({ ranges: next })
     if (!res.ok) {
       emit('notify', res.error ?? '范围特效写回失败', 'err')
       return false
@@ -232,7 +232,7 @@ async function aiSuggest(): Promise<void> {
   const prev = sentenceEffects.value.map((m) => ({ ...m }))
   busy.value = true
   try {
-    const r = await window.feather.suggestEffects({
+    const r = await window.dreamweave.suggestEffects({
       text: a.text,
       speaker: speakerName(lookups.value, a) || undefined,
       scene: lookups.value.sceneNameById.get(a.locationId) ?? a.locationId,

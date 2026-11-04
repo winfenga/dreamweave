@@ -176,11 +176,11 @@ const P = process.argv[2] ?? 'testdata/monte-cristo-10ch.t2w'
 section('0) 导入并切到演出页')
 console.log(
   JSON.stringify(
-    await ev(`(async()=>{const r=await window.feather.importPackage(${JSON.stringify(P)});
+    await ev(`(async()=>{const r=await window.dreamweave.importPackage(${JSON.stringify(P)});
       const i=document.querySelector('#app').__vue_app__._instance;
       i.setupState.summary=r.summary; i.setupState.view=null; i.setupState.viewError='';
       i.setupState.tab='stage';
-      const g=await window.feather.getView(); if(g.ok) i.setupState.view=g.data;
+      const g=await window.dreamweave.getView(); if(g.ok) i.setupState.view=g.data;
       return {ok:r.ok, title:r.summary&&r.summary.project.title, verify:r.summary&&r.summary.verify};})()`)
   )
 )
@@ -503,8 +503,8 @@ section('⑦ 对话框双模（normal / transparent，走真实设置面板）')
   console.log('  transparent 截图 bytes:', await shot(OUT_TRANSPARENT), '→', OUT_TRANSPARENT)
 
   // 还原 normal（保存 + 让 App 重读设置）
-  await ev(`(async () => { await window.feather.saveSettings({ dialogMode: 'normal', stageZoom: 1, autoplayPolicy: 'dubbing' })
-    window.__vs.setSettings(await window.feather.getSettings()); return true })()`)
+  await ev(`(async () => { await window.dreamweave.saveSettings({ dialogMode: 'normal', stageZoom: 1, autoplayPolicy: 'dubbing' })
+    window.__vs.setSettings(await window.dreamweave.getSettings()); return true })()`)
   await sleep(400)
   const nm = await ev(`(() => { const b=document.querySelector('.stage-textbox'); if(!b) return {gone:true}
     return { cls:b.className, mode:(window.__vs.settings()||{}).dialogMode } })()`)
@@ -595,8 +595,8 @@ section('⑨ 自动播放 · TTS 未配置兜底 + 定时器节奏')
     const posOf = () => ev(`(() => { const s = window.__vs.state(); return s.chapterIdx + ':' + s.offset })()`)
 
     // 9a) TTS 未配置 → 必须回退定时器且不卡死
-    await ev(`(async () => { await window.feather.saveSettings({ autoplayPolicy: 'tts' })
-      window.__vs.setSettings(await window.feather.getSettings()); return true })()`)
+    await ev(`(async () => { await window.dreamweave.saveSettings({ autoplayPolicy: 'tts' })
+      window.__vs.setSettings(await window.dreamweave.getSettings()); return true })()`)
     await sleep(300)
     await ev(`window.__vs.navTo(${idx})`)
     await sleep(400)
@@ -622,8 +622,8 @@ section('⑨ 自动播放 · TTS 未配置兜底 + 定时器节奏')
     await sleep(300)
 
     // 9b) 纯定时器策略
-    await ev(`(async () => { await window.feather.saveSettings({ autoplayPolicy: 'timer' })
-      window.__vs.setSettings(await window.feather.getSettings()); return true })()`)
+    await ev(`(async () => { await window.dreamweave.saveSettings({ autoplayPolicy: 'timer' })
+      window.__vs.setSettings(await window.dreamweave.getSettings()); return true })()`)
     await sleep(300)
     await ev(`window.__vs.navTo(${idx})`)
     await sleep(400)
@@ -645,8 +645,8 @@ section('⑨ 自动播放 · TTS 未配置兜底 + 定时器节奏')
     await clickEl('[data-testid=autoplay]')
     await sleep(300)
     // 还原默认策略
-    await ev(`(async () => { await window.feather.saveSettings({ autoplayPolicy: 'dubbing' })
-      window.__vs.setSettings(await window.feather.getSettings()); return true })()`)
+    await ev(`(async () => { await window.dreamweave.saveSettings({ autoplayPolicy: 'dubbing' })
+      window.__vs.setSettings(await window.dreamweave.getSettings()); return true })()`)
   }
 }
 

@@ -124,7 +124,7 @@ async function listModelsOfRow(p: TtsProvider): Promise<void> {
   }
   setModels(p.id, { state: 'loading', text: '探测中…', models: [], owners: {} })
   try {
-    const r = await window.feather.listModels({ id: p.id })
+    const r = await window.dreamweave.listModels({ id: p.id })
     if (r.ok && r.models?.length) {
       const owners = r.owners ?? {}
       const ownerCount = new Set(Object.values(owners).filter(Boolean)).size
@@ -175,7 +175,7 @@ async function listModelsForForm(): Promise<void> {
   }
   formModels.value = { state: 'loading', text: '探测中…', models: [], owners: {} }
   try {
-    const r = await window.feather.listModels({ baseURL: f.baseURL.trim(), apiKey: f.apiKey })
+    const r = await window.dreamweave.listModels({ baseURL: f.baseURL.trim(), apiKey: f.apiKey })
     if (r.ok && r.models?.length) {
       const owners = r.owners ?? {}
       const time = r.ms ? ` · ${r.ms} ms` : ''
@@ -208,7 +208,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const ps = await window.feather.getProviders()
+    const ps = await window.dreamweave.getProviders()
     const list = (isLlm.value ? ps.llm : ps.tts) as TtsProvider[]
     rows.value = list.map((p) => ({ ...p, voice: p.voice ?? '' }))
     activeId.value = isLlm.value ? ps.activeLlmId : ps.activeTtsId
@@ -248,8 +248,8 @@ function ttsPayload(): TtsProvider[] {
 
 /** 覆盖式保存：**重新读取**另一侧后原样带回，避免清空；只改动本组件负责的那一侧。 */
 async function persist(): Promise<{ ok: boolean; error?: string }> {
-  const ps = await window.feather.getProviders()
-  return window.feather.saveProviders({
+  const ps = await window.dreamweave.getProviders()
+  return window.dreamweave.saveProviders({
     llm: isLlm.value ? llmPayload() : ps.llm,
     tts: isLlm.value ? ps.tts : ttsPayload(),
     activeLlmId: isLlm.value ? activeId.value : ps.activeLlmId,
@@ -416,7 +416,7 @@ async function probeRow(p: TtsProvider): Promise<void> {
     return
   }
   try {
-    const r = await window.feather.probeProvider(p.id)
+    const r = await window.dreamweave.probeProvider(p.id)
     if (r.ok) {
       setProbe(p.id, { state: 'ok', text: `✅ 可连接 · ${r.httpStatus ?? '—'} · ${r.ms ?? 0} ms` })
     } else {

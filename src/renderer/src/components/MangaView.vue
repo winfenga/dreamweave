@@ -2,7 +2,7 @@
 /**
  * 漫画阅读（M1）。
  *
- * 数据来源 `window.feather.getMangaView()`（IPC `t2w:mangaView`），
+ * 数据来源 `window.dreamweave.getMangaView()`（IPC `t2w:mangaView`），
  * 模型见 `shared/manga-types.ts`；解析在 `main/t2w/manga.ts`。
  *
  * 交互设计要点：
@@ -86,7 +86,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const res = await window.feather.getMangaView()
+    const res = await window.dreamweave.getMangaView()
     if (!res.ok || !res.data) {
       error.value = res.error ?? '漫画数据加载失败'
       data.value = null

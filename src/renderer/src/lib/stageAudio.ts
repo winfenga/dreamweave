@@ -153,7 +153,7 @@ export class StageAudioController {
   /** 合成并播放一段文本（主进程缓存优先）；未配置时 ok:false 且带可读错误 */
   async speak(text: string, voice?: string): Promise<SpeakOutcome> {
     if (this.disposed || !text.trim()) return { ok: false, error: '文本为空' }
-    const res = await window.feather.speak(text, voice)
+    const res = await window.dreamweave.speak(text, voice)
     if (!res.ok || !res.url) return res
     const played = await this.playClip(res.url)
     if (!played.ok) {

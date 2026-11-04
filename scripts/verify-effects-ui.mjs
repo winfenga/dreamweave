@@ -78,7 +78,7 @@ runtimeErrors.length = 0
 
 const PKG = 'D:/galcomic/dreamweave/testdata/monte-cristo-10ch.t2w'
 const opened = await ev(`(async () => {
-  const r = await window.feather.importPackage(${JSON.stringify(PKG)}, 't2w')
+  const r = await window.dreamweave.importPackage(${JSON.stringify(PKG)}, 't2w')
   if (!r.ok) return { ok: false, error: r.error }
   return { ok: true, title: r.summary?.project?.title }
 })()`)
@@ -91,7 +91,7 @@ await send('Page.bringToFront')
 await sleep(400)
 
 await ev(`window.__pkg = ${JSON.stringify(PKG)}; true`)
-const openedUi = await ev("(async () => {\nconst ws = await window.feather.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.feather.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
+const openedUi = await ev("(async () => {\nconst ws = await window.dreamweave.listWorkspaces();\nif (!ws.ok) return { ok: false, why: 'readshelf-failed' };\nconst BS = String.fromCharCode(92);\nconst norm = function (s) { return String(s || '').split(BS).join('/').toLowerCase(); };\nconst src = norm(window.__pkg);\nconst hits = ws.items.filter(function (i) { return norm(i.t2wPath) === src; });\nif (!hits.length) return { ok: false, why: 'not-in-shelf' };\nhits.sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });\nconst t = hits[0];\nconst book = document.querySelector('[data-testid=\"lib-shelf\"] .slot[data-book-id=\"' + t.id + '\"] .book');\nif (book) { book.click(); return { ok: true, via: 'ui', id: t.id, title: t.title }; }\nconst r = await window.dreamweave.openWorkspace(t.id);\nreturn r.ok ? { ok: true, via: 'ipc', id: t.id } : { ok: false, why: r.error || 'open-failed' };\n})()")
 check('从书库打开', openedUi?.ok, openedUi?.why ?? '')
 await sleep(1200)
 
@@ -133,7 +133,7 @@ check('注册表收集到 14 种 handler', handlers?.length === 14, JSON.stringi
 // 此时 actors.resolve() 返回 null 是**正确行为**（不是 bug），
 // 所以验收必须先导航到有角色的句子，否则测的是「没立绘时不该播」而不是「有立绘时能播」。
 const jumped = await ev(`(async () => {
-  const r = await window.feather.getView()
+  const r = await window.dreamweave.getView()
   if (!r.ok || !r.data) return { ok: false, why: 'getView 失败' }
   const idx = r.data.actions.findIndex(a => a.characterId)
   if (idx < 0) return { ok: false, why: '整包没有带角色的句子' }
