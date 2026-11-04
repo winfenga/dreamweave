@@ -234,3 +234,128 @@ npm run verify:effects-ui            # 24 项（特效真机 E2E）
 | 曲库（`music_annotation` / `chapter_music_*`） | 需要曲库服务，当前只能手动选本地 BGM 文件 |
 | `novel_generation_*` / `novel_qa_*`（7 份） | 多轮 agent 架构，与单轮 JSON 任务模型对不上，且不在「读一本书」主目标上 |
 | 第 5 步（特效推荐粒度改为整场） | 文档标注可选，需改 `EffectSuggestInput`/IPC/面板交互，等前四步效果验证完再看 |
+
+---
+
+## 7. 补充：B/C/D 线扩展（2026-11-04 晚）
+
+### 7.1 B 线收尾：画风基座压缩
+
+**问题**：原版 `visual_novel_art_style` 是 **1392 字符的画法规范书**（线条粗细变化、
+阴影形状、发束节奏、材质反射…）。那些是给「会画画的助手」看的，
+对 Qwen-Image / MOSS 这类扩散模型基本无效——它们按语义 token 出图，
+不理解「线稿有粗细变化」该怎么执行。整条提示词 1859 字符里 75% 是画风，
+真正的角色描述只有 300 字，注意力被严重稀释。
+
+**压缩后**：anime 198 / realistic 226 / scene 181 字符（**-86%**）。
+完整提示词 1859 → **494 字符（-73%）**。
+
+原则：只留扩散模型真正响应的三类信息——画风定位、质量词、禁则。
+删掉全部「怎么画」的过程描述。原版的「资料边界」段保留（它管内容忠实度，
+原文写朴素就别画华服，这条对扩散模型有效）。
+
+**同时修掉一处实测问题**：包内 `:character-art-style` 就是
+`visual_novel_art_style` 原文（该包本身用这份提示词生成），
+「基座 + 包内」拼接会重复两遍。改为 `pickArtStyle()`：包内优先、基座兜底。
+
+新增 `scripts/show-prompt.mjs`：用真实工作库渲染最终提示词，不跑 ComfyUI 也能看效果。
+
+### 7.2 C1：拆 worldImpression
+
+`worldImpression` 里塞了整条剧情走向（马赛港→渔船→婚宴→伊夫堡→巴黎→越狱→复仇）。
+那是给人看的背景理解，绘图模型只需要**画面事实**。
+
+新增 `visualImpression` 字段（200–350 字，纯视觉），明确禁止剧情走向/人物命运/
+情节路线/后续事件。生图优先用它，旧包回落 `worldImpression`（不动存量）。
+
+### 7.3 C2：LLM 提示词改写
+
+模板输出是「小说描述 + 画风」的拼接，人类可读但不是扩散模型最优输入。
+新增 `prompt-rewrite.ts`，按目标模型规范改写：
+
+| 目标模型 | 规范 |
+|---|---|
+| Qwen-Image 2.1 | 400–500 词英文观察式描述 + `wh_ratio`；禁质量词与祈使句 |
+| MOSS-Image | 英文自然语言或 tag 串 + 官方负向词 |
+| 通用/SD | 75 token 内标签串 |
+
+规范来源 [docs/image-prompt-specs.md](./image-prompt-specs.md)（官方文档核对）。
+
+**铁律**：只重组与细化，不得新增原文没有的设定（避免「朴素水手装」被写成「华服」）。
+改写失败自动回落原模板输出，不阻断出图。
+
+### 7.4 D：透明图 + 审查拦截
+
+**D1 透明图**：采用 Qwen-Image 2.1 官方固定句式，严格置于人物/图标模板**首尾**：
+
+```
+This is an RGBA image with transparency. <描述>.
+The image has alpha channel and the background is transparent.
+```
+
+扩散模型对序列首尾 attention 权重最高；此前「透明背景」埋在中段是最弱位置。
+实测现有图已是 RGBA（四角 alpha=0，透明像素 74.8%），但那是靠「浅色渐变背景」
+碰巧得到，换模型就会出白底。
+
+**D2 负面词分流**：人物/图标压制 `background`/`scene`/`白色背景`/`白边`；
+场景压制 `空白背景`/`透明背景` 并要求无人物。两者对背景要求**完全相反**，
+共用一份会让场景图把背景压没。
+
+**D3 审查拦截**（用户策略：返回不足 50 字即判定）：
+- `singleChat` 层拦截，标 `blocked`
+- `chatWithFallback` 遇 blocked **立即终止**：不重试、不换配置
+  （同一内容换哪个模型都会被拦，重试只是白烧 token）
+- 新增第七种任务状态 `blocked`（与 `failed` 区分：failed 可重试，
+  blocked 必须人工处理）
+- 下游任务跳过时明确提示「依赖任务被审查拦截」而非傻等
+- 抽出 `depKeysFor` 供 `depSatisfied` 与 `findBlockedDep` 共用
+
+### 7.5 §5 八个「位置已有」模板全部落地
+
+| 模板 | 落点 | 实现 |
+|---|---|---|
+| `visual_novel_art_style` | `imagegen-defaults.ts` | `ART_STYLE_CHAR_ANIME` |
+| `visual_novel_art_style_realistic` | 同上 | `ART_STYLE_CHAR_REALISTIC` |
+| `visual_novel_scene_art_style` | 同上 | `ART_STYLE_SCENE_ANIME` |
+| `plot_scene_image_user_prompt` | 同上 | `DEFAULT_SCENE_PROMPT_TEMPLATE` |
+| `chapter_recognition_system_prompt` | `chapter-recognition*.ts` | 正则失败时 LLM 兜底切章 |
+| `scene_group_image_user_prompt` | `scene-grouping.ts` | 启发式场景分组省图 |
+| `location_type_sprite_sheet` | `sprite-sheet.ts` | 网格布局 + `{{types}}` |
+| `character_map_sprite_sheet` | 同上 | 同上 |
+
+---
+
+## 8. 全部验证脚本（14 个，全通过）
+
+```bash
+npm run typecheck                 # TS 全通过
+npm run build                     # 构建通过
+node scripts/compare-prompts.mjs  # 模板比对（实质改动仅 2 个受保护的 story_script）
+node scripts/verify-t2w.mjs
+node scripts/verify-workspace-units.mjs
+node scripts/verify-batching.mjs
+node scripts/verify-t4-task-state.mjs        # 40 通过
+node scripts/verify-t5-overview.mjs          # 76 通过
+node scripts/verify-effect-coverage.mjs      # 74/74 可播
+node scripts/verify-effect-guide.mjs         # 30 通过
+node scripts/verify-manga-pipeline.mjs       # 50 通过
+node scripts/verify-manga.mjs                # 18 通过
+node scripts/verify-scene-prompt.mjs         # 32 通过
+node scripts/verify-transparency-guard.mjs   # 42 通过
+node scripts/verify-chapter-recognition.mjs  # 45 通过
+node scripts/verify-imagegen-layout.mjs      # 50 通过
+```
+
+真机 E2E（需 `electron . --remote-debugging-port=9222`）：
+`verify-manga-ui.mjs` 21 项 · `verify-effects-ui.mjs` 24 项 · `verify-settings-ui.mjs` 23 项
+
+---
+
+## 9. 两处陈旧断言的修复（记录原因）
+
+| 脚本 | 症状 | 真因 |
+|---|---|---|
+| `verify-t5-overview` | 71/5 失败 | 硬编码任务数 29；C 线新增 4 个任务后注册表变 33。改为动态取 `EXPECT_TASKS` |
+| `verify-t4-task-state` | 39/1 失败 | E2 用 `includes` 逐字匹配幂等判据，但实现后来加了 `!force` 短路。**已验证该行在最初基线 `5faf392` 就带着 `!force`**，属脚本陈旧而非本次回归。改为语义断言 |
+
+这两处都不是本次改动引入的，但不修会让回归信号失真，故一并修复。
