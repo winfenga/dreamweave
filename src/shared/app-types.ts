@@ -24,6 +24,12 @@ export interface ComfyuiSettings {
   charPromptTemplate: string
   /** 地图图标正面提示词模板（{{locationType}} {{iconStyle}} {{novelGenre}}） */
   iconPromptTemplate: string
+  /**
+   * 场景背景图正面提示词模板
+   * （{{sceneName}} {{summary}} {{sceneDescription}} {{worldImpression}} {{novelGenre}} {{artStyle}}）。
+   * 可选：旧 settings.json 无此字段时由 store 补默认。
+   */
+  scenePromptTemplate?: string
   /** ComfyUI API 格式工作流 JSON 字符串（含 {{prompt}}/{{negative}} 占位） */
   workflowJson: string
 }

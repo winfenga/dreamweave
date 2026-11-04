@@ -5,8 +5,12 @@
  * 渲染规则：`{{key}}` → vars[key]；缺失变量填**空串**；渲染后做轻量清理
  * （压缩 3+ 连续空行、重复标点、空括号），保证缺变量时句子依然通顺。
  */
-import { DEFAULT_CHAR_PROMPT_TEMPLATE, DEFAULT_ICON_PROMPT_TEMPLATE } from '../../shared/imagegen-defaults'
-import type { CharTarget, ImagegenContext, IconTarget } from '../../shared/imagegen-types'
+import {
+  DEFAULT_CHAR_PROMPT_TEMPLATE,
+  DEFAULT_ICON_PROMPT_TEMPLATE,
+  DEFAULT_SCENE_PROMPT_TEMPLATE
+} from '../../shared/imagegen-defaults'
+import type { CharTarget, ImagegenContext, IconTarget, SceneTarget } from '../../shared/imagegen-types'
 
 /** 人物模板的全部合法占位符（校验/说明用） */
 export const CHAR_TEMPLATE_VARS = [
@@ -21,6 +25,16 @@ export const CHAR_TEMPLATE_VARS = [
 
 /** 图标模板的全部合法占位符 */
 export const ICON_TEMPLATE_VARS = ['locationType', 'iconStyle', 'novelGenre'] as const
+
+/** 场景模板的全部合法占位符 */
+export const SCENE_TEMPLATE_VARS = [
+  'sceneName',
+  'summary',
+  'sceneDescription',
+  'worldImpression',
+  'novelGenre',
+  'artStyle'
+] as const
 
 /** 模板渲染：替换 {{key}}；缺失变量填空串。 */
 export function renderTemplate(template: string, vars: Record<string, string>): string {
@@ -75,6 +89,22 @@ export function buildIconPromptVars(target: IconTarget, ctx: ImagegenContext): R
   }
 }
 
+/**
+ * 场景背景图模板变量。
+ * `artStyle` 优先取 reader `:scene-art-style`（包内给出的画风指导语），
+ * 缺失时退回空串（模板里那一行会被清理掉，不影响其余句子）。
+ */
+export function buildScenePromptVars(target: SceneTarget, ctx: ImagegenContext): Record<string, string> {
+  return {
+    sceneName: (target.name ?? target.sceneId ?? '').trim(),
+    summary: (target.summary ?? '').trim(),
+    sceneDescription: (target.sceneDescription ?? '').trim(),
+    worldImpression: (ctx.worldImpression ?? '').trim(),
+    novelGenre: (ctx.novelGenre ?? '').trim(),
+    artStyle: (ctx.sceneArtStyle ?? '').trim()
+  }
+}
+
 /** 渲染人物立绘正面提示词。 */
 export function renderCharPrompt(target: CharTarget, ctx: ImagegenContext, template?: string): string {
   return renderTemplate(template || DEFAULT_CHAR_PROMPT_TEMPLATE, buildCharPromptVars(target, ctx))
@@ -83,4 +113,9 @@ export function renderCharPrompt(target: CharTarget, ctx: ImagegenContext, templ
 /** 渲染地点图标正面提示词。 */
 export function renderIconPrompt(target: IconTarget, ctx: ImagegenContext, template?: string): string {
   return renderTemplate(template || DEFAULT_ICON_PROMPT_TEMPLATE, buildIconPromptVars(target, ctx))
+}
+
+/** 渲染场景背景正面提示词。 */
+export function renderScenePrompt(target: SceneTarget, ctx: ImagegenContext, template?: string): string {
+  return renderTemplate(template || DEFAULT_SCENE_PROMPT_TEMPLATE, buildScenePromptVars(target, ctx))
 }

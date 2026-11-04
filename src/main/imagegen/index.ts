@@ -15,7 +15,7 @@ import type {
 import type { ImagegenTargets } from './data'
 import { probeComfyui, generateViaComfyui } from './comfyui'
 import { applyWorkflow } from './workflow'
-import { renderCharPrompt, renderIconPrompt } from './prompts'
+import { renderCharPrompt, renderIconPrompt, renderScenePrompt } from './prompts'
 import { readImagegenTargets } from './data'
 import { commitCharImage, commitLocationIcon, commitSceneImage } from './backfill'
 
@@ -86,17 +86,9 @@ export async function imagegenGenerate(
         // 悬空场景 id（不在任何 plotLocation/merge 产物里）：跳过并警告，不写盘
         return { ok: false, error: `未知的场景 id（不在场景清单里，已跳过）：${req.targetId}` }
       }
-      // 场景图提示词：用场景描述直接成文（与人物/图标共用同一负面与工作流通道）
-      prompt = [
-        `为小说创作一张场景插画，题材：${targets.context.novelGenre}。`,
-        `场景名称：「${t.name}」。`,
-        t.sceneDescription ? `场景描述：${t.sceneDescription}` : `场景概述：${t.summary}`,
-        `世界观氛围：${targets.context.worldImpression}`,
-        '构图要求：无人物或人物极小作为点缀，重点呈现环境氛围与空间层次；',
-        '画面无文字、无水印；画风与小说题材一致，光影自然，色彩和谐。'
-      ]
-        .filter((l) => l.trim())
-        .join('\n')
+      // 场景图提示词：走模板（B3，来自新版 plot_scene_image_user_prompt 的本地化版本），
+      // 与人物/图标共用同一负面与工作流通道。模板可被设置页覆盖。
+      prompt = renderScenePrompt(t, targets.context, comfy.scenePromptTemplate)
     } else {
       const t = targets.icons.find((i) => i.locationType === req.targetId)
       if (!t) return { ok: false, error: `未知的地点类型目标：${req.targetId}` }

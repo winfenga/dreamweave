@@ -29,6 +29,41 @@ export const DEFAULT_ICON_PROMPT_TEMPLATE = [
   '缩小到很小的尺寸时依然能一眼辨认出类别。画面中不出现任何文字。'
 ].join('\n')
 
+/**
+ * 场景背景图正面提示词模板（新版 `plot_scene_image_user_prompt` 的本地化版本）。
+ *
+ * 与原版差异：原版是**直接出图**的任务描述（「直接生成图片供下载，不返回 JSON」），
+ * 我们走 ComfyUI，需要的是 **text2img 正面提示词**，因此保留其构图与避让约束，
+ * 去掉对模型下的执行指令。
+ *
+ * 占位符：{{sceneName}} {{summary}} {{sceneDescription}} {{worldImpression}} {{novelGenre}} {{artStyle}}
+ */
+export const DEFAULT_SCENE_PROMPT_TEMPLATE = [
+  '为小说创作一张 16:9 的完整场景背景插画，题材：{{novelGenre}}。',
+  '场景名称：「{{sceneName}}」。',
+  '场景资料：{{summary}}',
+  '现场细节：{{sceneDescription}}',
+  '世界观氛围：{{worldImpression}}',
+  '美术指导：{{artStyle}}',
+  '构图与避让要求：具备可信的空间纵深；画面中部偏上保留视觉上相对平静、尺度合理的区域，',
+  '供前景人物叠加使用——不要在该位置放置大件前景物体、强烈光斑或密集纹样；',
+  '底部约四分之一可能被对话框遮挡，关键地点特征与主要视觉焦点安排在它上方；',
+  '左右两侧保留裁切余量。',
+  '画面内容：不绘制任何人物，不预画对话框、安全区、人物轮廓、边框、文字、水印或界面元素；',
+  '不制作拼贴、多视图设定稿或海报。底部与人物站位处仍绘制自然连续的完整环境，',
+  '不是空白、透明区域或刻意空出的地板。',
+  '代表状态：若资料包含互斥状态（如完好与废墟、白昼与黑夜），择其一有明确依据的典型状态，',
+  '保留与之相容的空间结构与标志物，不把两种状态拼接起来；资料稀少时依据场景名称与世界观克制设计，',
+  '不编造剧情事实。',
+  '画面质量：高清细腻，材质可信且有手绘质感，光影有环境依据，色彩和谐统一，',
+  '画风与「{{novelGenre}}」的整体视觉气质一致。'
+].join('\n')
+
+/** 场景模板占位符说明（设置页用） */
+export const SCENE_TEMPLATE_HINT =
+  '可用占位符：{{sceneName}} 场景名 · {{summary}} 场景概述 · {{sceneDescription}} 场景细节 · ' +
+  '{{worldImpression}} 世界观概述 · {{novelGenre}} 小说题材 · {{artStyle}} 场景画风指导语。缺失的变量替换为空串。'
+
 /** 通用负面提示词（低质、水印、文字等）。 */
 export const DEFAULT_NEGATIVE_PROMPT =
   '低质量，低分辨率，模糊，噪点，画面扭曲，比例失调，多余肢体，多余手指，肢体畸形，' +
@@ -121,6 +156,7 @@ export function defaultComfyuiSettings(): {
   negativePrompt: string
   charPromptTemplate: string
   iconPromptTemplate: string
+  scenePromptTemplate: string
   workflowJson: string
 } {
   return {
@@ -133,6 +169,7 @@ export function defaultComfyuiSettings(): {
     negativePrompt: DEFAULT_NEGATIVE_PROMPT,
     charPromptTemplate: DEFAULT_CHAR_PROMPT_TEMPLATE,
     iconPromptTemplate: DEFAULT_ICON_PROMPT_TEMPLATE,
+    scenePromptTemplate: DEFAULT_SCENE_PROMPT_TEMPLATE,
     workflowJson: DEFAULT_WORKFLOW_JSON
   }
 }

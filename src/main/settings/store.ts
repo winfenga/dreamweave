@@ -254,6 +254,10 @@ export function sanitizeSettings(raw: Partial<ModelSettings> | null | undefined)
       typeof rawComfy.iconPromptTemplate === 'string' && rawComfy.iconPromptTemplate.trim()
         ? rawComfy.iconPromptTemplate
         : dflt.iconPromptTemplate,
+    scenePromptTemplate:
+      typeof rawComfy.scenePromptTemplate === 'string' && rawComfy.scenePromptTemplate.trim()
+        ? rawComfy.scenePromptTemplate
+        : dflt.scenePromptTemplate,
     workflowJson:
       typeof rawComfy.workflowJson === 'string' && rawComfy.workflowJson.trim()
         ? rawComfy.workflowJson

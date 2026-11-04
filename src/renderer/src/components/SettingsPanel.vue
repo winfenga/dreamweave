@@ -17,8 +17,10 @@ import {
   DEFAULT_CHAR_PROMPT_TEMPLATE,
   DEFAULT_ICON_PROMPT_TEMPLATE,
   DEFAULT_NEGATIVE_PROMPT,
+  DEFAULT_SCENE_PROMPT_TEMPLATE,
   DEFAULT_WORKFLOW_JSON,
   ICON_TEMPLATE_HINT,
+  SCENE_TEMPLATE_HINT,
   WORKFLOW_HINT
 } from '../../../shared/imagegen-defaults'
 
@@ -48,6 +50,7 @@ const comfyCfg = ref(4)
 const comfyNegative = ref('')
 const comfyCharTpl = ref('')
 const comfyIconTpl = ref('')
+const comfySceneTpl = ref('')
 const comfyWorkflow = ref('')
 const comfyProbeState = ref('')
 const comfyProbing = ref(false)
@@ -80,6 +83,7 @@ async function loadAll(): Promise<void> {
   comfyNegative.value = c.negativePrompt
   comfyCharTpl.value = c.charPromptTemplate
   comfyIconTpl.value = c.iconPromptTemplate
+  comfySceneTpl.value = c.scenePromptTemplate ?? DEFAULT_SCENE_PROMPT_TEMPLATE
   comfyWorkflow.value = c.workflowJson
 }
 
@@ -177,6 +181,7 @@ async function save(): Promise<void> {
       negativePrompt: comfyNegative.value,
       charPromptTemplate: comfyCharTpl.value,
       iconPromptTemplate: comfyIconTpl.value,
+      scenePromptTemplate: comfySceneTpl.value,
       workflowJson: comfyWorkflow.value
     }
   })
@@ -319,6 +324,14 @@ async function save(): Promise<void> {
       <div class="hint">{{ ICON_TEMPLATE_HINT }}</div>
       <div style="margin-top: 4px">
         <button class="btn" data-testid="comfy-icon-tpl-reset" @click="comfyIconTpl = DEFAULT_ICON_PROMPT_TEMPLATE">恢复默认</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>场景背景图提示词模板（多行）</label>
+      <textarea v-model="comfySceneTpl" rows="8" data-testid="comfy-scene-tpl" style="width: 100%; font-family: ui-monospace, SFMono-Regular, Consolas, monospace" />
+      <div class="hint">{{ SCENE_TEMPLATE_HINT }}</div>
+      <div style="margin-top: 4px">
+        <button class="btn" data-testid="comfy-scene-tpl-reset" @click="comfySceneTpl = DEFAULT_SCENE_PROMPT_TEMPLATE">恢复默认</button>
       </div>
     </div>
     <div class="field">
