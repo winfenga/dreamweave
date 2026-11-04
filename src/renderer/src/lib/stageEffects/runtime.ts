@@ -167,6 +167,33 @@ export class StageEffectRuntime {
     this.actors = actors
   }
 
+  /**
+   * 验收用：**同步**启动一条轨道（不排 setTimeout、不自动 stop）。
+   *
+   * 只供 `scripts/verify-effects-ui.mjs` 通过 `window.__dw_fxProbe` 调用，
+   * 目的是在真实渲染进程里立刻看到 handler 建出的 DOM / 写入的 CSS 变量。
+   * 生产路径永远走 `scheduleSingle()`（带 at/duration 调度）。
+   *
+   * 返回是否成功起了实例。
+   */
+  debugStartTrack(
+    handler: TrackHandler,
+    track: EffectTrack,
+    entry: EffectCatalogEntry,
+    action: StageAction | null
+  ): boolean {
+    const scopeId = `d${++this.scopeSeq}`
+    this.singleScopes.add(scopeId)
+    const inst = this.startTrack(handler, track, entry, action, scopeId, PRIORITY_SINGLE)
+    if (!inst) {
+      this.singleScopes.delete(scopeId)
+      this.compositor.removeScope(scopeId)
+      return false
+    }
+    this.singleInstances.add(inst)
+    return true
+  }
+
   // ---------------------------------------------------------------- 数据接入
   setCatalog(entries: EffectCatalogEntry[]): void {
     this.byId = new Map(entries.map((e) => [e.id, e]))

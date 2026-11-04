@@ -562,6 +562,48 @@ onMounted(() => {
     // 目录异步就绪后再应用一次（覆盖「挂载时该句已带特效」的情形）
     fxRuntime?.onPositionChange(fxPosition())
   })
+  // 自动化验收探针：把特效运行时挂到 window，供 scripts/verify-effects-ui.mjs
+  // 在真实渲染进程里逐条挂载特效、观察 DOM 与 CSS 变量、再验证清理是否干净。
+  // 这是**测试钩子**，不是产品功能；只在渲染进程存在，不暴露任何 IPC 能力。
+  ;(window as unknown as Record<string, unknown>).__dw_fxProbe = {
+    handlers: () =>
+      [...((fxRuntime as unknown as { handlers: Map<string, unknown> } | null)?.handlers?.keys() ?? [])],
+    /** 挂载一条特效（entry id），返回是否真的起了 handler */
+    mount: async (effectId: string, _durMs?: number) => {
+      const r = await loadCatalog()
+      if (!r.entries) return { ok: false, error: r.error ?? '目录不可用' }
+      const entry = r.entries.find((e) => e.id === effectId)
+      if (!entry) return { ok: false, error: `目录无此 id：${effectId}` }
+      const rt = fxRuntime as unknown as {
+        setCatalog: (e: unknown) => void
+        handlers: Map<string, unknown>
+        debugStartTrack: (h: unknown, t: unknown, e: unknown, a: unknown) => boolean
+      } | null
+      if (!rt) return { ok: false, error: '运行时未就绪' }
+      rt.setCatalog(r.entries)
+      const a = action.value
+      const warned: string[] = []
+      for (const track of entry.tracks ?? []) {
+        const h = rt.handlers.get(String(track.kind))
+        if (!h) {
+          warned.push(`缺 handler: ${track.kind}`)
+          continue
+        }
+        // 同步直接起（不走 setTimeout）：验收要的是「立刻能看到」
+        rt.debugStartTrack(h, track, entry, a)
+      }
+      return { ok: true, warned }
+    },
+    /** 清掉所有特效（等同换句） */
+    stopAll: () => {
+      fxRuntime?.cancelAll()
+    },
+    /** 跳到指定章/偏移（验收用：需要先到一句有立绘的台词） */
+    gotoAction: (chapterIndex: number, offsetIndex: number) => {
+      goChapter(chapterIndex)
+      offset.value = Math.max(0, offsetIndex)
+    }
+  }
   // 系统侧（F11 / 系统菜单）改了全屏也要同步按钮文案，故订阅主进程推送
   stopFullScreenSync = window.feather.onFullScreenChanged((on) => {
     fullScreen.value = on
