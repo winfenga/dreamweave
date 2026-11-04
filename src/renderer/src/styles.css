@@ -2246,3 +2246,436 @@ textarea:focus-visible {
   80% { opacity: 0.9; transform: translateY(-14px); }
   100% { opacity: 0; transform: translateY(-22px); }
 }
+
+/* ==========================================================================
+   A5 · 剩余 6 种轨道 kind 的样式
+   （ambient / particles / birds / eyelids / camera / distortion）
+   camera 与 distortion 只走 .stage-bg 的 --fx-* 合成，无需专属 CSS。
+   ========================================================================== */
+
+/* ---------- eyelids：眼睑开合 ---------- */
+.fx-eyelids {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  animation-fill-mode: both;
+  animation-timing-function: ease-in-out;
+}
+.fx-eyelids-lid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 52%;
+  background: radial-gradient(ellipse at center, #241a12 0%, #120c08 70%, #0a0603 100%);
+  will-change: transform;
+  animation-fill-mode: both;
+  animation-timing-function: ease-in-out;
+  animation-duration: inherit;
+}
+.fx-eyelids-top {
+  top: 0;
+  transform-origin: top center;
+  border-radius: 0 0 50% 50% / 0 0 22% 22%;
+}
+.fx-eyelids-bottom {
+  bottom: 0;
+  transform-origin: bottom center;
+  border-radius: 50% 50% 0 0 / 22% 22% 0 0;
+}
+
+/* blink：张开 → 闭 → 张开（一次完整眨眼） */
+.fx-eyelids--blink .fx-eyelids-top {
+  animation-name: fxFxLidTopBlink;
+}
+.fx-eyelids--blink .fx-eyelids-bottom {
+  animation-name: fxFxLidBottomBlink;
+}
+@keyframes fxFxLidTopBlink {
+  0% { transform: translateY(-100%); }
+  40% { transform: translateY(0); }
+  55% { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
+}
+@keyframes fxFxLidBottomBlink {
+  0% { transform: translateY(100%); }
+  40% { transform: translateY(0); }
+  55% { transform: translateY(0); }
+  100% { transform: translateY(100%); }
+}
+
+/* open：起始闭合 → 缓缓张开 */
+.fx-eyelids--open .fx-eyelids-top {
+  animation-name: fxFxLidTopOpen;
+}
+.fx-eyelids--open .fx-eyelids-bottom {
+  animation-name: fxFxLidBottomOpen;
+}
+@keyframes fxFxLidTopOpen {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
+}
+@keyframes fxFxLidBottomOpen {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(100%); }
+}
+
+/* close：起始张开 → 缓缓闭合 */
+.fx-eyelids--close .fx-eyelids-top {
+  animation-name: fxFxLidTopOpen;
+  animation-direction: reverse;
+}
+.fx-eyelids--close .fx-eyelids-bottom {
+  animation-name: fxFxLidBottomOpen;
+  animation-direction: reverse;
+}
+
+/* struggle：半闭 → 反复尝试张开（抖动）→ 最终睁开 */
+.fx-eyelids--struggle .fx-eyelids-top {
+  animation-name: fxFxLidTopStruggle;
+}
+.fx-eyelids--struggle .fx-eyelids-bottom {
+  animation-name: fxFxLidBottomStruggle;
+}
+@keyframes fxFxLidTopStruggle {
+  0% { transform: translateY(8%); }
+  12% { transform: translateY(-22%); }
+  20% { transform: translateY(2%); }
+  32% { transform: translateY(-38%); }
+  40% { transform: translateY(-4%); }
+  60% { transform: translateY(-52%); }
+  72% { transform: translateY(-30%); }
+  100% { transform: translateY(-100%); }
+}
+@keyframes fxFxLidBottomStruggle {
+  0% { transform: translateY(-8%); }
+  12% { transform: translateY(22%); }
+  20% { transform: translateY(-2%); }
+  32% { transform: translateY(38%); }
+  40% { transform: translateY(4%); }
+  60% { transform: translateY(52%); }
+  72% { transform: translateY(30%); }
+  100% { transform: translateY(100%); }
+}
+
+/* ---------- ambient：环境氛围粒子 ---------- */
+.fx-ambient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: var(--fx-ambient-opacity, 0.7);
+}
+.fx-ambient i {
+  position: absolute;
+  display: block;
+  width: calc(var(--fx-ambient-size, 1) * 6px * var(--fx-p-size, 1));
+  height: calc(var(--fx-ambient-size, 1) * 6px * var(--fx-p-size, 1));
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  will-change: transform, opacity;
+}
+
+/* 雾：大块柔和色斑缓慢横移 */
+.fx-ambient--fog i {
+  width: calc(var(--fx-ambient-size, 1) * 26px);
+  height: calc(var(--fx-ambient-size, 1) * 16px);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.5), transparent 68%);
+  filter: blur(6px);
+  animation-name: fxAmbientFog;
+}
+@keyframes fxAmbientFog {
+  0% { transform: translate(0, 0) scale(1); opacity: 0; }
+  20% { opacity: 0.85; }
+  80% { opacity: 0.85; }
+  100% { transform: translate(60px, -22px) scale(1.5); opacity: 0; }
+}
+
+/* 风：细长弧线掠过 */
+.fx-ambient--wind i {
+  width: calc(var(--fx-ambient-size, 1) * 40px);
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  animation-name: fxAmbientWind;
+}
+@keyframes fxAmbientWind {
+  0% { transform: translateX(-12vw) scaleX(0.4); opacity: 0; }
+  25% { opacity: 0.8; }
+  100% { transform: translateX(110vw) scaleX(1.4); opacity: 0; }
+}
+
+/* 花瓣：粉色小片旋转飘落 */
+.fx-ambient--petals i {
+  width: calc(var(--fx-ambient-size, 1) * 7px);
+  height: calc(var(--fx-ambient-size, 1) * 5px);
+  border-radius: 62% 38% 55% 45% / 48% 55% 45% 52%;
+  background: linear-gradient(135deg, #ffd6e2, #f09bb4);
+  animation-name: fxAmbientFall;
+}
+@keyframes fxAmbientFall {
+  0% { transform: translate(0, -8vh) rotate(0deg); opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { transform: translate(9vw, 108vh) rotate(420deg); opacity: 0; }
+}
+
+/* 落叶：黄褐色叶片，翻飞更剧烈 */
+.fx-ambient--leaves i {
+  width: calc(var(--fx-ambient-size, 1) * 9px);
+  height: calc(var(--fx-ambient-size, 1) * 5px);
+  border-radius: 2px 70% 2px 70%;
+  background: linear-gradient(135deg, #d9a94b, #9a6b26);
+  animation-name: fxAmbientLeaf;
+}
+@keyframes fxAmbientLeaf {
+  0% { transform: translate(0, -8vh) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translate(-7vw, 108vh) rotate(-560deg); opacity: 0; }
+}
+
+/* 蝴蝶：两片翅膀开合，飘忽横向移动 */
+.fx-ambient--butterflies i {
+  width: calc(var(--fx-ambient-size, 1) * 8px);
+  height: calc(var(--fx-ambient-size, 1) * 6px);
+  border-radius: 50% 50% 45% 45%;
+  background: linear-gradient(120deg, #f7d774, #e08fb0);
+  animation-name: fxAmbientButterfly;
+  animation-timing-function: ease-in-out;
+}
+@keyframes fxAmbientButterfly {
+  0% { transform: translate(0, 0) scaleX(1); opacity: 0; }
+  15% { opacity: 0.95; }
+  25% { transform: translate(3vw, -2vh) scaleX(0.35); }
+  40% { transform: translate(6vw, 1vh) scaleX(1); }
+  55% { transform: translate(9vw, -3vh) scaleX(0.35); }
+  70% { transform: translate(12vw, 0) scaleX(1); }
+  85% { opacity: 0.9; }
+  100% { transform: translate(16vw, -1vh) scaleX(0.6); opacity: 0; }
+}
+
+/* 萤火虫：暗中闪烁的小光点，缓慢游移 */
+.fx-ambient--fireflies i {
+  width: calc(var(--fx-ambient-size, 1) * 4px);
+  height: calc(var(--fx-ambient-size, 1) * 4px);
+  border-radius: 50%;
+  background: radial-gradient(circle, #f6ffb0 0%, #c9e86a 45%, transparent 72%);
+  box-shadow: 0 0 8px 2px rgba(214, 240, 130, 0.55);
+  animation-name: fxAmbientFirefly;
+  animation-timing-function: ease-in-out;
+}
+@keyframes fxAmbientFirefly {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  20% { opacity: 1; }
+  50% { transform: translate(-3vw, -4vh) scale(1.1); opacity: 0.55; }
+  75% { opacity: 0.95; }
+  100% { transform: translate(2vw, -9vh) scale(0.5); opacity: 0; }
+}
+
+/* 火星：橙色亮点上升，带拖尾感 */
+.fx-ambient--embers i {
+  width: calc(var(--fx-ambient-size, 1) * 3px);
+  height: calc(var(--fx-ambient-size, 1) * 3px);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff3c4 0%, #ff9b3d 45%, transparent 75%);
+  box-shadow: 0 0 6px 2px rgba(255, 140, 60, 0.5);
+  animation-name: fxAmbientEmber;
+  animation-timing-function: ease-out;
+}
+@keyframes fxAmbientEmber {
+  0% { transform: translate(0, 8vh) scale(1); opacity: 0; }
+  10% { opacity: 1; }
+  70% { opacity: 0.85; }
+  100% { transform: translate(4vw, -60vh) scale(0.35); opacity: 0; }
+}
+
+/* 尘土：灰褐色小点缓慢上升飘散 */
+.fx-ambient--dust i {
+  width: calc(var(--fx-ambient-size, 1) * 3px);
+  height: calc(var(--fx-ambient-size, 1) * 3px);
+  border-radius: 50%;
+  background: rgba(214, 200, 176, 0.85);
+  animation-name: fxAmbientDust;
+  animation-timing-function: ease-out;
+}
+@keyframes fxAmbientDust {
+  0% { transform: translate(0, 10vh) scale(0.7); opacity: 0; }
+  15% { opacity: 0.8; }
+  100% { transform: translate(5vw, -40vh) scale(1.2); opacity: 0; }
+}
+
+/* 烟：较大的灰白团块缓慢上升扩散 */
+.fx-ambient--smoke i {
+  width: calc(var(--fx-ambient-size, 1) * 18px);
+  height: calc(var(--fx-ambient-size, 1) * 18px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(168, 160, 150, 0.6), transparent 70%);
+  filter: blur(3px);
+  animation-name: fxAmbientSmoke;
+  animation-timing-function: ease-out;
+}
+@keyframes fxAmbientSmoke {
+  0% { transform: translate(0, 12vh) scale(0.5); opacity: 0; }
+  20% { opacity: 0.75; }
+  100% { transform: translate(-4vw, -55vh) scale(2.6); opacity: 0; }
+}
+
+/* 气泡：淡蓝空心圆上升 */
+.fx-ambient--bubbles i {
+  width: calc(var(--fx-ambient-size, 1) * 7px);
+  height: calc(var(--fx-ambient-size, 1) * 7px);
+  border-radius: 50%;
+  border: 1px solid rgba(190, 232, 255, 0.8);
+  background: radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.85), transparent 58%);
+  animation-name: fxAmbientBubble;
+  animation-timing-function: ease-in;
+}
+@keyframes fxAmbientBubble {
+  0% { transform: translate(0, 10vh) scale(0.6); opacity: 0; }
+  15% { opacity: 0.9; }
+  100% { transform: translate(-2vw, -52vh) scale(1.15); opacity: 0; }
+}
+
+/* 光束：斜射的柔光柱 */
+.fx-ambient--rays i {
+  width: calc(var(--fx-ambient-size, 1) * 60px);
+  height: 140%;
+  top: -20% !important;
+  background: linear-gradient(176deg, rgba(255, 246, 214, 0.28), transparent 62%);
+  filter: blur(8px);
+  transform-origin: top center;
+  animation-name: fxAmbientRay;
+  animation-timing-function: ease-in-out;
+}
+@keyframes fxAmbientRay {
+  0% { opacity: 0; transform: skewX(-9deg) scaleX(0.85); }
+  30% { opacity: 0.85; }
+  70% { opacity: 0.7; }
+  100% { opacity: 0; transform: skewX(7deg) scaleX(1.1); }
+}
+
+/* ---------- particles：天气粒子 ---------- */
+.fx-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: var(--fx-p-opacity, 0.85);
+}
+.fx-particles i {
+  position: absolute;
+  top: -6%;
+  display: block;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  will-change: transform;
+}
+
+/* 雨：细长竖线，带风时斜落 */
+.fx-particles--rain i {
+  width: calc(var(--fx-p-size, 1) * 1.6px * var(--fx-p-scale, 1));
+  height: calc(var(--fx-p-size, 1) * 26px * var(--fx-p-scale, 1));
+  border-radius: 999px;
+  background: linear-gradient(to bottom, transparent, rgba(206, 226, 244, 0.95));
+  animation-name: fxParticlesRain;
+}
+@keyframes fxParticlesRain {
+  0% { transform: translate(0, 0); opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% {
+    transform: translate(calc(var(--fx-p-wind, 60) * 1px), 112vh);
+    opacity: 0;
+  }
+}
+
+/* 雪：柔软白点，缓慢飘落带摆动 */
+.fx-particles--snow i {
+  width: calc(var(--fx-p-size, 1) * 6px * var(--fx-p-scale, 1));
+  height: calc(var(--fx-p-size, 1) * 6px * var(--fx-p-scale, 1));
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0%, rgba(255, 255, 255, 0.75) 55%, transparent 78%);
+  animation-name: fxParticlesSnow;
+  animation-timing-function: ease-in-out;
+}
+@keyframes fxParticlesSnow {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  40% { transform: translate(calc(var(--fx-p-wind, 60) * 0.5px), 44vh) rotate(120deg); }
+  70% { transform: translate(calc(var(--fx-p-wind, 60) * -0.35px), 76vh) rotate(240deg); }
+  90% { opacity: 1; }
+  100% {
+    transform: translate(calc(var(--fx-p-wind, 60) * 0.7px), 110vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* ---------- birds：鸟群 ---------- */
+.fx-birds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.fx-bird {
+  position: absolute;
+  right: -12%;
+  width: calc(var(--fx-bird-size, 1) * 18px * var(--fx-bird-scale, 1));
+  height: calc(var(--fx-bird-size, 1) * 8px * var(--fx-bird-scale, 1));
+  animation-name: fxBirdFly;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+  will-change: transform;
+}
+@keyframes fxBirdFly {
+  0% { transform: translate(0, 0); opacity: 0; }
+  6% { opacity: 1; }
+  94% { opacity: 1; }
+  100% { transform: translate(-118vw, -3vh); opacity: 0; }
+}
+.fx-bird-wing {
+  position: absolute;
+  top: 50%;
+  width: 50%;
+  height: 100%;
+  border-top: 2px solid rgba(38, 30, 24, 0.82);
+  border-radius: 50% 50% 0 0;
+  transform-origin: center bottom;
+  animation-name: fxBirdFlap;
+  animation-duration: var(--fx-flap-dur, 700ms);
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+  animation-direction: alternate;
+}
+.fx-bird-wing-l {
+  left: 0;
+  border-radius: 60% 0 0 0;
+  transform-origin: 100% 100%;
+}
+.fx-bird-wing-r {
+  right: 0;
+  border-radius: 0 60% 0 0;
+  transform-origin: 0 100%;
+}
+@keyframes fxBirdFlap {
+  0% { transform: scaleY(1) rotate(0deg); }
+  100% { transform: scaleY(-0.55) rotate(-6deg); }
+}
+
+/* 乌鸦比海鸥颜色更深、体型略钝 */
+.fx-birds--crow .fx-bird-wing {
+  border-top-color: rgba(16, 12, 9, 0.9);
+  border-top-width: 2.5px;
+}
+.fx-birds--crow .fx-bird {
+  animation-name: fxBirdFlyLow;
+}
+@keyframes fxBirdFlyLow {
+  0% { transform: translate(0, 0) rotate(-3deg); opacity: 0; }
+  6% { opacity: 1; }
+  94% { opacity: 1; }
+  100% { transform: translate(-118vw, 6vh) rotate(4deg); opacity: 0; }
+}
