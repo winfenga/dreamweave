@@ -42,6 +42,7 @@ import {
   setWorkspaceSession
 } from '../workspace/session'
 import { unpack } from '../workspace/unpack'
+import { repairShardIndex } from '../workspace/verify'
 import { buildTxtWorkspace } from '../workspace/txt-import'
 import { recognizeChaptersByLlm } from '../workspace/chapter-recognition-llm'
 import { speak } from '../tts'
@@ -52,6 +53,7 @@ import { saveEffectsAction } from '../effects-edit'
 import { suggestEffects } from '../effects-suggest'
 import {
   cancel as pipelineCancel,
+  cancelAll as pipelineCancelAll,
   onProgress as onPipelineProgress,
   parseStatus as pipelineParseStatus,
   start as pipelineStart
@@ -167,6 +169,8 @@ export const IPC = {
   pipelineParseStatus: 'pipeline:parseStatus',
   /** M2 解析：取消某次运行 */
   pipelineParseCancel: 'pipeline:parseCancel',
+  /** M2 解析：取消**全部**运行中的解析（UI 在按钮被锁死时的兜底清场） */
+  pipelineParseCancelAll: 'pipeline:parseCancelAll',
   /** M2 解析（T5）：29 任务面板视图（本机状态 + 失败明细 + 来源包历史条数） */
   pipelineTasksOverview: 'pipeline:tasksOverview',
   /** M2 解析：主进程 → 渲染进程 进度事件 */
@@ -281,7 +285,8 @@ async function loadPackage(filePath: string): Promise<ImportResult> {
       jsonLen: pkg.jsonLen,
       blobStart: pkg.blobStart,
       verify: pkg.verifySummary,
-      guards: pkg.guards
+      guards: pkg.guards,
+      workspaceDir: dirName
     })
     return { ok: true, summary }
   } catch (e) {
@@ -329,7 +334,8 @@ async function loadTxt(filePath: string): Promise<ImportResult> {
       jsonLen: 0,
       blobStart: 0,
       verify: { total: 0, passed: 0, failed: 0 },
-      guards: { sumSizeMatches: true, noTrailingBytes: true }
+      guards: { sumSizeMatches: true, noTrailingBytes: true },
+      workspaceDir: dirName
     })
     return { ok: true, summary }
   } catch (e) {
@@ -355,7 +361,23 @@ async function openWorkspace(dirName: string): Promise<ImportResult> {
     const r = resolveWorkspaceDir(workspaceRoot(), dirName)
     if (!r.ok || !r.dir) return { ok: false, error: r.error }
     const root = r.dir
-    const index = await readIndex(root)
+    let index = await readIndex(root)
+    // 🔧 索引自愈：补齐「分片文件在、index.shards 缺行」的老工作库。
+    //
+    // 历史 bug：`shards.updateShard` 只写分片文件、不登记索引（已修），
+    // 于是修复前跑过解析的库都是「产物在、索引缺行」→ 所有聚合型任务
+    // （worldImpression / locationTree / characterAppearance）报「读不到上游产物」。
+    // 在开库时自动补登记，老库直接可用，**不需要用户重新解析烧 token**。
+    // 失败不阻断开库（只影响聚合任务，且下次开库会再试）。
+    try {
+      const rep = await repairShardIndex(root)
+      if (rep.added > 0) {
+        console.log(`[workspace] 索引自愈：补登记 ${rep.added} 个分片（${dirName}）`)
+        index = await readIndex(root)
+      }
+    } catch {
+      /* 自愈失败不阻断开库 */
+    }
     setWorkspaceSession(makeSession(root, index))
     const manifest = await assembleManifest(root, index)
     const summary = buildSummary(manifest, {
@@ -364,7 +386,8 @@ async function openWorkspace(dirName: string): Promise<ImportResult> {
       jsonLen: 0,
       blobStart: 0,
       verify: { total: 0, passed: 0, failed: 0 },
-      guards: { sumSizeMatches: true, noTrailingBytes: true }
+      guards: { sumSizeMatches: true, noTrailingBytes: true },
+      workspaceDir: dirName
     })
     return { ok: true, summary }
   } catch (e) {
@@ -705,7 +728,18 @@ export function registerIpc(): void {
       force?: boolean
     ): Promise<{ ok: boolean; runId?: string; error?: string }> => {
       try {
-        return await pipelineStart(pkgId, { range: range ?? 'all', force: force === true })
+        // 🔴 root 必须按 pkgId（工作库**目录名**）精确定位，不能依赖「当前会话」。
+        //
+        // 历史 bug：这里只传 pkgId、不传 root，于是 orchestrator.start() 回落到
+        // `getWorkspaceSession()?.root` —— 即**主进程当前打开的那本书**。
+        // 而任务面板（tasksOverview）按 pkgId 精确读另一本，两者会指向不同工作库：
+        //   · 解析产物写进了错误的书（污染用户数据）
+        //   · 面板读的是目标书 → 状态永远显示「待跑 / 全 0」
+        // 典型症状就是「一个说成功、一个说报错、一个说空的」。
+        // 与 tasksOverview / imagegenTargets 的取法保持一致（同一路径规则）。
+        const root = pkgId ? join(workspaceRoot(), sanitizeSegment(pkgId)) : undefined
+        if (!root) return { ok: false, error: '未指定工作库，无法启动解析' }
+        return await pipelineStart(pkgId, { root, range: range ?? 'all', force: force === true })
       } catch (e) {
         return { ok: false, error: (e as Error).message }
       }
@@ -715,6 +749,22 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.pipelineParseStatus, async (_event, runId: string): Promise<ParseStatus> => pipelineParseStatus(runId))
 
   ipcMain.handle(IPC.pipelineParseCancel, async (_event, runId: string): Promise<{ ok: boolean }> => pipelineCancel(runId))
+
+  /**
+   * 取消**所有**运行中的解析（兜底）。
+   *
+   * 场景：渲染层的「取消」按钮只知道自己记着的 runId。页面刷新、换书、
+   * 或从别的入口触发过解析后，那个 run 就失去了取消入口——而此时
+   * `actionsDisabled` 会因 `running` 恒为 true 锁死全部按钮，用户看到
+   * 「点什么都没反应」，只能重启应用。这个入口让 UI 能一键清场。
+   */
+  ipcMain.handle(IPC.pipelineParseCancelAll, async (): Promise<{ ok: boolean; cancelled: number }> => {
+    try {
+      return pipelineCancelAll()
+    } catch (e) {
+      return { ok: false, cancelled: 0 }
+    }
+  })
 
   /**
    * 任务面板（T5）：29 任务分组视图（本机状态 / 失败明细 / 来源包历史）。

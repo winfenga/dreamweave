@@ -76,3 +76,44 @@ export async function writeIndex(root: string, idx: WorkspaceIndex): Promise<voi
   await writeFile(tmp, JSON.stringify(idx, null, 2), 'utf8')
   await rename(tmp, abs)
 }
+
+/**
+ * **索引读-改-写的唯一安全入口**（进程内全局串行）。
+ *
+ * 为什么必须有它：`index.json` 是**单一文件**，却有多个并发写者——
+ *   - `shards.updateShard` 写产物后要登记 `index.shards[]`（按文件粒度并发）；
+ *   - `persistence.mirrorTasksToIndex` 镜像任务状态（每次状态变更）；
+ *   - `shard-write.updateShardRow` 更新 sha256/entryCount；
+ *   - 用户写回、资产导入等。
+ * 各自 `readIndex → 改 → writeIndex` 会**互相覆盖**：A 读到旧值、B 也读到旧值，
+ * A 先写、B 后写 → A 的改动静默丢失（典型后果就是分片行丢失 →
+ * 聚合型任务报「工作库中没有任何 upstream 结果」）。
+ *
+ * 因此所有「读-改-写」一律经本函数：整个读-改-写在同一队列内完成，天然互斥。
+ * 单纯读取（`readIndex`）不受影响，无需排队。
+ *
+ * @param root    工作库根
+ * @param mutate  收当前索引，**就地修改或返回新对象**；返回 undefined 表示就地改完
+ * @returns 修改后的索引（已落盘）
+ */
+let indexMutex: Promise<unknown> = Promise.resolve()
+
+export async function updateIndex(
+  root: string,
+  mutate: (idx: WorkspaceIndex) => WorkspaceIndex | void | Promise<WorkspaceIndex | void>
+): Promise<WorkspaceIndex> {
+  const task = async (): Promise<WorkspaceIndex> => {
+    const idx = await readIndex(root)
+    const ret = await mutate(idx)
+    const next = ret && typeof ret === 'object' ? (ret as WorkspaceIndex) : idx
+    await writeIndex(root, next)
+    return next
+  }
+  const next = indexMutex.then(task, task)
+  // 队列只关心「串行」，不关心成败；失败不阻断后续排队者
+  indexMutex = next.then(
+    () => undefined,
+    () => undefined
+  )
+  return next
+}

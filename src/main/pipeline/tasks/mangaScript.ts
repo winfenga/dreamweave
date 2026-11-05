@@ -338,9 +338,49 @@ export const mangaScriptAdapter: LlmTaskAdapter = {
                 })
             }
           })
+        // 🔴 解析出 0 章 = 本实例没有可用产物，**必须抛错**而不是「成功但空」。
+        //
+        // 历史事故（用户实测）：模型三次都成功返回了 8216 / 14197 / 11613 token 的内容，
+        // 但 parse 全部落空 → 写出的产物 `chapters: []`，任务状态却是 `succeeded`。
+        // 于是下游 mangaEffects / mangaMusic 报「mangaScript 产物里没有任何 chapters」，
+        // 用户看到的是「漫画跑完了但什么都没有」，而且界面上漫画任务全是绿的（成功）。
+        //
+        // 静默成功比失败更糟：它会污染状态机、让重跑逻辑认为无需重跑、
+        // 也让用户误以为需要去查下游。抛错→任务标 failed→面板红→可重跑，才是正确语义。
+        if (normalized.length === 0) {
+          throw new Error(
+            'mangaScript 解析结果没有任何章节（chapters 为空数组）：模型可能返回了空壳或输出被截断，请检查原始响应后重跑'
+          )
+        }
         return { chapters: normalized, warnings: Array.isArray(o.warnings) ? o.warnings : [] }
       }
     }
-    return { chapters: [], warnings: [], raw: (content ?? '').slice(0, 500) }
+    // ⚠️ 解析失败 → **抛错**，而不是 return 空产物。
+    //
+    // 历史事故（用户实测）：模型成功返回了 8216 / 14197 / 11613 token 的内容，
+    // 但 parse 全部落空 → 这里 return `{chapters: [], raw: content.slice(0,500)}`，
+    // 任务状态却是 `succeeded`。于是下游 mangaEffects / mangaMusic 报
+    // 「mangaScript 产物里没有任何 chapters」，用户在界面上看到漫画任务全绿
+    // 却「什么都没有」。**静默成功比失败更糟**：污染状态机、重跑逻辑认为无需重跑、
+    // 用户还得去查下游才能发现上游是空的。
+    //
+    // 同时：原实现只存 500 字符 → 事后完全无法判断「模型输出残缺」还是
+    // 「解析策略有 bug」，只能对着半截字符串猜。现在把真实长度、结尾片段、
+    // 失败原因全部写进异常消息，让下一次失败一次就能定位。
+    const text = String(content ?? '')
+    const failReason = (() => {
+      const obj = parseJsonLoose(text)
+      if (obj === null) return 'parseJsonLoose 返回 null（响应不是合法 JSON）'
+      if (typeof obj !== 'object' || Array.isArray(obj))
+        return `解析结果不是对象（实际 ${Array.isArray(obj) ? 'array' : typeof obj}）`
+      if (!Array.isArray((obj as Record<string, unknown>).chapters))
+        return `顶层缺少 chapters 数组（实际字段：${Object.keys(obj as Record<string, unknown>).join(',') || '无'}）`
+      return '未知原因'
+    })()
+    throw new Error(
+      `mangaScript 解析失败：${failReason}。响应共 ${text.length} 字符，` +
+        `开头 ${JSON.stringify(text.slice(0, 120))}，结尾 ${JSON.stringify(text.slice(-160))}。` +
+        (text.length > 20000 ? '响应很长，可能被上游按实际输出上限截断（JSON 未闭合）——请减小分片体量或换支持长输出的模型后重跑。' : '')
+    )
   }
 }

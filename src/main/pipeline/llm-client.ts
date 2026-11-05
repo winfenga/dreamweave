@@ -40,6 +40,30 @@ export interface ChatOptions {
    * 内容可能为空，这属**正常**，不得复用「任务级截断」语义把可达端点误判为失败。
    */
   probe?: boolean
+  /**
+   * **放开短输出审查判定**（仅用于「设计输出本来就极短」的任务）。
+   *
+   * 背景：审查拦截判定规则是「返回不足 50 字即为拒绝语」（见 `isLikelyContentBlocked`）。
+   * 这条规则对绝大多数任务成立（JSON 产物不可能这么短），但 `cacheWarming` 的
+   * **设计输出就是 `{"answer":"ok"}`（15 字符）**——它是原文接收确认，不是内容生产。
+   * 用 50 字下限去判它，等于把「正确回答」稳定判成「拒绝语」，
+   * 进而把整条流水线卡在第一步（后续任务全部因依赖被拦截而 skipped）。
+   *
+   * 因此对这类任务显式关掉长度判定。审查拦截此时退化为不做检测——
+   * 这在语义上是可接受的：cacheWarming 不产出任何内容数据，
+   * 即使上游真的回了拒绝语，也只会得到一个 `answer: null` 的产物（见其 parse），
+   * 不会污染下游。
+   */
+  allowShortOutput?: boolean
+  /**
+   * 外部中断信号（取消解析时由编排器传入）。
+   *
+   * 与 `timeoutMs`（单次请求自身的超时）**可同时存在**：任一触发都会 abort。
+   * 用途：让「取消」真正打断在途请求，而不是只置一个标志等请求自然结束。
+   * 没有它的话，一个挂住的长请求会让 run 永远显示 running，
+   * 渲染层所有按钮被 `actionsDisabled` 锁死（真实事故：取消按钮也救不回来）。
+   */
+  signal?: AbortSignal
 }
 
 /** 单次请求的原始产物（供落盘审计）。 */
@@ -137,7 +161,13 @@ export async function singleChat(
   const body = buildRequestBody(provider, messages, opts)
   const timeoutMs = opts.timeoutMs && opts.timeoutMs > 0 ? opts.timeoutMs : DEFAULT_TIMEOUT_MS
   const started = Date.now()
-  const signal = AbortSignal.timeout(timeoutMs)
+  const timeoutSignal = AbortSignal.timeout(timeoutMs)
+  // 外部取消信号（若有）与超时信号**合并**：任一触发都中断请求。
+  // AbortSignal.any 在 Node 18+ 可用；不可用时退回超时信号（取消靠协作式检查兜底）。
+  const signal =
+    opts.signal && typeof AbortSignal.any === 'function'
+      ? AbortSignal.any([timeoutSignal, opts.signal])
+      : timeoutSignal
   let res: Response
   try {
     res = await fetch(endpoint, {
@@ -267,7 +297,7 @@ export async function singleChat(
   //   为什么用长度而不是关键词：拒绝语的措辞千变万化（多语言、多供应商），
   //   关键词穷举不了；而「不足 50 字」对任何一个真实任务输出来说都不可能——
   //   JSON 产物最短也有几十个字段。这条规则简单、无漏判。
-  if (isLikelyContentBlocked(content)) {
+  if (!opts.allowShortOutput && isLikelyContentBlocked(content)) {
     return {
       ok: false,
       httpStatus: res.status,
@@ -288,13 +318,39 @@ export const CONTENT_BLOCKED_MIN_CHARS = 50
 /**
  * 判定一段返回内容是否是审查拒绝。
  *
- * 只用长度判定（用户指定策略）：真实任务输出（结构化 JSON）不可能短于 50 字，
- * 而拒绝语通常只有一两句。这样既不依赖多语言关键词表，也不会误伤正常短输出。
+ * 策略演变（第二次修正，务必读）：
  *
- * 注意：纯空白也算拦截（长度按 trim 后计算）。
+ * **第一版**：只按长度——「不足 50 字即拦截」。理由是真实任务输出是结构化 JSON，
+ * 不可能这么短，而拒绝语只有一两句。
+ *
+ * **为什么不够**：JSON 产物的「合法空结果」也可以极短。实测事故——
+ * `characterAppearance` 正常返回 `{"characters":[]}`（17 字符，表示「本书没提取出
+ * 需要合并形象的人物」），却被判成内容审查拦截，任务标记 blocked，
+ * 用户看到的是「内容审查拦截」，而真实情况是**模型给了一个正确的空结果**。
+ * 这类产物很常见（`{"characters":[]}` / `{"factions":[]}` / `{"items":[]}`
+ * / `{"locations":[]}` / `{"relations":[]}` …），按纯长度判会稳定误伤。
+ *
+ * **现在的判据**（两者取并集）：
+ *  - 是**合法 JSON** 且能解析出对象/数组 → **不判拦截**（长度再短也不判：空结果是
+ *    正常业务语义，不是拒绝；是否「内容为空」由各适配器的 parse 自己决定怎么兜底）；
+ *  - 不是 JSON（自然语言）→ 仍按 **<50 字** 判拦截（拒绝语就是这个形态）。
+ *
+ * 这样既保住「短拒绝语必被抓」的原意（拒绝语不是 JSON），
+ * 又不会把合法的短 JSON 空结果误判成拒绝。
  */
 export function isLikelyContentBlocked(content: string): boolean {
-  return content.trim().length < CONTENT_BLOCKED_MIN_CHARS
+  const text = content.trim()
+  if (!text) return true
+  // 长度够长 → 不是拒绝语（无论什么形态）
+  if (text.length >= CONTENT_BLOCKED_MIN_CHARS) return false
+  // 短文本：是合法 JSON 就放行（空结果的正常形态），否则按拒绝语处理
+  try {
+    const parsed = JSON.parse(text)
+    return !(parsed !== null && typeof parsed === 'object')
+  } catch {
+    // 不是 JSON —— 短自然语言，判为拒绝语
+    return true
+  }
 }
 
 /**

@@ -12,6 +12,15 @@ export interface SummarySource {
   blobStart: number
   verify: { total: number; passed: number; failed: number }
   guards: { sumSizeMatches: boolean; noTrailingBytes: boolean }
+  /**
+   * 工作库**目录名**（`<userData>/workspace/` 下那一层）。
+   *
+   * 必填（不是可选）：渲染层所有「按工作库定位」的 IPC 都要它；
+   * 漏传会让解析面板/生图面板拼出不存在的路径（历史 bug：
+   * 报「工作库索引缺失或不可读：…/<包内ID>/index.json (ENOENT)」+ 任务计数错乱）。
+   * 故意设为必填，让编译器逼所有调用点显式提供，而不是默默回落成包内 ID。
+   */
+  workspaceDir: string
 }
 
 function kindOf(path: string): string {
@@ -109,6 +118,7 @@ export function buildSummary(manifest: T2wManifest, source: SummarySource): Impo
     totalSize: source.totalSize,
     jsonLen: source.jsonLen,
     blobStart: source.blobStart,
+    workspaceDir: source.workspaceDir,
     project: {
       id: String(p.id ?? ''),
       title: String(p.title ?? ''),

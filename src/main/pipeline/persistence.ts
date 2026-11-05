@@ -15,7 +15,7 @@
  */
 import { readShard, routeResultsKey, shardNameFor, updateShard } from '../workspace/shards'
 import { CONTAINER_FILES, attemptsShardFile } from '../workspace/paths'
-import { readIndex, writeIndex } from '../workspace/index-store'
+import { updateIndex } from '../workspace/index-store'
 import type { ShardEnvelope } from '../workspace/types'
 import type { AttemptRecord } from '../../shared/pipeline-types'
 import type { TaskState } from '../../shared/workspace-types'
@@ -165,22 +165,23 @@ function nextSeq(env: ShardEnvelope): number {
 
 /**
  * 镜像任务状态到 `index.json` 的 `tasks`（records/tasks.json 为权威源）。
- * 进程内串行化，避免编排器内的并发读-改-写丢更新。
+ *
+ * 走 `updateIndex`（**全局索引队列**）而不是本模块私有队列：
+ * `index.json` 是单一文件，同时有「分片登记 / 本函数 / sha256 回填」等多个写者。
+ * 各用各的队列 = 各读各的旧值 → 后写者覆盖前者，**静默丢行**。
+ * 历史事故就是这条路径把刚登记的 `results` 分片行覆盖掉，导致所有聚合型任务
+ * （worldImpression / locationTree / characterAppearance）报「读不到上游产物」。
  *
  * 契约：调用方**只传本机运行状态**（`loadTaskStates` 的结果 + 本次运行写入），
  * 来源包自带的历史状态不经本函数进索引（否则 `index.tasks` 也会混入非本机成绩）。
  */
-let indexQueue: Promise<void> = Promise.resolve()
 export function mirrorTasksToIndex(root: string, states: Record<string, TaskState>): Promise<void> {
-  indexQueue = indexQueue.then(async () => {
-    try {
-      const idx = await readIndex(root)
-      idx.tasks = { ...idx.tasks, ...states }
-      idx.integrity.lastVerifiedAt = new Date().toISOString()
-      await writeIndex(root, idx)
-    } catch {
-      // 索引缺失/损坏时忽略镜像（records/tasks.json 已是权威源）
-    }
+  return updateIndex(root, (idx) => {
+    idx.tasks = { ...idx.tasks, ...states }
+    idx.integrity.lastVerifiedAt = new Date().toISOString()
   })
-  return indexQueue
+    .then(() => undefined)
+    .catch(() => {
+      // 索引缺失/损坏时忽略镜像（records/tasks.json 已是权威源）
+    })
 }

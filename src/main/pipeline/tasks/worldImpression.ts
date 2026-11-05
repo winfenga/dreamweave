@@ -31,6 +31,7 @@
  * （与 cacheWarming 同风格，不抛崩）。
  */
 import type { ChatMessage, LlmTaskAdapter, TaskRuntime, UpstreamEntry } from '../../../shared/pipeline-types'
+import { unwrapData } from '../upstream'
 import { parseJsonLoose } from './cacheWarming'
 
 /** plot 产物条目 → chunkIndex（key 形如 `<pkgId>:<revisionId>:plot:0`，末段为 chunk 序号）。 */
@@ -60,8 +61,11 @@ export const worldImpressionAdapter: LlmTaskAdapter = {
     const blocks: string[] = []
     let occurrence = 0
     for (const e of entries) {
-      const v = e.value as { chunkSummary?: unknown } | null
-      const summary = v && typeof v === 'object' ? (v as Record<string, unknown>).chunkSummary : undefined
+      // 🔴 必须先 unwrapData：本机产物的 value 是 `{data:{chunkSummary}, …}` 信封，
+      // 来源包老产物可能是裸 `{chunkSummary}`。直接读 e.value.chunkSummary 会全部落空
+      // （历史 bug：报「全部 plot 条目均无 chunkSummary」，而磁盘上摘要明明有内容）。
+      const data = unwrapData(e.value)
+      const summary = data && typeof data === 'object' ? (data as Record<string, unknown>).chunkSummary : undefined
       if (!nonEmptyString(summary)) {
         // 缺 chunkSummary 的条目跳过并留痕（如 raw 兜底产物），不阻断全书聚合
         rt.warnings.push(`worldImpression：跳过无 chunkSummary 的 plot 产物条目（key=${e.key}）`)

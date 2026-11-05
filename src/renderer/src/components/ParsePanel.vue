@@ -89,6 +89,33 @@ function fmtElapsed(ms: number | null): string {
 /** 运行中禁用一切会再次触发编排的按钮（避免并发两次 run）。 */
 const actionsDisabled = computed(() => busy.value || running.value)
 
+/**
+ * 「强制解锁」：丢弃本地 runId 并让主进程取消所有在跑解析。
+ *
+ * 为什么需要：`actionsDisabled = busy || running`，而 `running` 只在
+ * 收到一个**属于自己 runId** 的 done/error 事件时才转 false。一旦出现
+ *   · 页面刷新 / 换书导致 `runId` 丢失，
+ *   · 或某个 run 卡在在途请求上迟迟不收尾，
+ * 就会 `running` 恒为 true → **所有按钮永久 disabled**，用户点什么都「没反应」，
+ * 且不知道该点哪里自救（实测踩过：用户连续反馈「重跑按钮没反应」）。
+ * 提供这个按钮，让用户一条路走回可用状态。
+ */
+async function forceUnlock(): Promise<void> {
+  try {
+    await window.dreamweave.parseCancelAll()
+  } catch {
+    /* 主进程可能没有在跑的 run，忽略 */
+  }
+  runId.value = ''
+  running.value = false
+  busy.value = false
+  phase.value = ''
+  done.value = 0
+  total.value = 0
+  error.value = ''
+  await refreshOverview()
+}
+
 async function refreshStatus(): Promise<void> {
   if (!runId.value) return
   try {
@@ -136,6 +163,22 @@ function stopOverviewPolling(): void {
 async function finishRun(): Promise<void> {
   stopOverviewPolling()
   await refreshOverview()
+  // 「整轮没有任何一个实例真正执行」时给出明确说明。
+  //
+  // 典型场景（历史 bug）：重跑按钮只传单个 taskId，编排器的 range 严格过滤把依赖
+  // 全滤掉 → 所有实例判「依赖未就绪」→ 全部 skipped → 界面毫无变化，
+  // 用户以为「点了没反应」。现在依赖闭包已补上，但仍要保留这条兜底提示：
+  // 用户用「按子集解析」手填任务名时同样可能漏依赖。
+  const st = tasks.value ?? {}
+  const vals = Object.values(st) as { status?: string }[]
+  if (vals.length && !vals.some((v) => v?.status === 'running' || v?.status === 'succeeded' || v?.status === 'local')) {
+    const skipped = vals.filter((v) => v?.status === 'skipped').length
+    if (skipped === vals.length) {
+      error.value =
+        '本次没有任何任务真正执行：全部被跳过。最常见原因是只指定了目标任务、但没有包含它依赖的前置任务。' +
+        '请用上方的「按用途分档」（演出/漫画/人物）按钮，或点击任务行右侧的「重跑」（已自动包含依赖）。'
+    }
+  }
 }
 
 /** 拉一次任务面板（不依赖 runId；打开面板即拉）。 */
@@ -311,10 +354,44 @@ function startSubset(): void {
   void start(ids)
 }
 
-/** 重跑某任务：复用 parseStart（编排器按指纹幂等，已成功且输入未变的实例自动跳过）。 */
+/**
+ * 重跑某任务（含它的**全部传递依赖**）。
+ *
+ * ⚠️ 必须补依赖闭包，不能只传 `[taskId]`。
+ *
+ * 历史 bug（用户实测「重跑按钮没反应」）：原先实现是 `start([taskId])`，
+ * 而编排器对 `range` 是**严格过滤**——不在 range 里的任务根本不会被调度
+ * （`ordered = topo.order.filter(t => rangeSet.has(t.id))`）。于是重跑
+ * `mangaEffects` 这种有上游的任务时，它的依赖全被过滤掉 →
+ * 每个实例都判「依赖未就绪」→ 全部 `skipped`，结束得飞快，
+ * UI 上看起来就是「点了没反应」。同理 `characterAppearance` 需要 canonical，
+ * `worldImpression` 需要 plot，全都点不动。
+ *
+ * 修法与子集按钮共用同一份闭包展开逻辑（`buildSubset` 里的那段），
+ * 保证「重跑某任务」= 「重跑它以依赖闭包为范围的最小可执行集合」。
+ */
 function rerun(taskId: string): void {
   if (actionsDisabled.value) return
-  void start([taskId])
+  const byId = new Map(rows.value.map((t) => [t.id, t]))
+  const picked = new Set<string>([taskId])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const id of [...picked]) {
+      const t = byId.get(id)
+      if (!t) continue
+      for (const dep of t.dependsOn ?? []) {
+        const base = depBaseOf(dep)
+        if (byId.has(base) && !picked.has(base)) {
+          picked.add(base)
+          grew = true
+        }
+      }
+    }
+  }
+  // 保持拓扑序（rows 已按拓扑序排列）
+  const ids = rows.value.filter((t) => picked.has(t.id)).map((t) => t.id)
+  void start(ids)
 }
 
 async function cancel(): Promise<void> {
@@ -418,6 +495,23 @@ onUnmounted(() => {
         强制重跑
       </button>
       <button v-if="running" class="btn danger" data-testid="parse-cancel" @click="cancel">取消</button>
+      <!-- 强制解锁：只在「按钮被锁 / 找不到自己的 runId」时才显示。
+           症状是「点任何按钮都没反应」，用户不知道能做什么；这条给一条出路。 -->
+      <button
+        v-if="actionsDisabled && !running"
+        class="btn"
+        data-testid="parse-force-unlock"
+        title="重置解析面板状态（当按钮莫名变灰、点击无反应时用）"
+        @click="forceUnlock"
+      >
+        强制解锁
+      </button>
+    </div>
+
+    <!-- 锁死态提示：按钮全灰但界面没有正在跑的进度 → 明确告诉用户怎么办 -->
+    <div v-if="actionsDisabled && !running" class="sub" style="margin-top: 8px; color: #c46a3a">
+      按钮当前不可用（面板认为有解析在运行，但本地没有它的进度）。
+      若确认没有解析在跑，点上面的「强制解锁」恢复。
     </div>
 
     <div v-if="phase" class="parse-progress">

@@ -332,7 +332,13 @@ export interface TaskRuntime {
   /** 调用 LLM（内部含同配置退避重试 + 换配置 fallback + attempts 留痕） */
   llm(
     messages: ChatMessage[],
-    opts?: { maxTokens?: number; thinking?: 'enabled' | 'disabled'; effort?: number }
+    opts?: {
+      maxTokens?: number
+      thinking?: 'enabled' | 'disabled'
+      effort?: number
+      /** 放开「不足 50 字 = 审查拦截」判定（见 `LlmTaskAdapter.allowShortOutput`） */
+      allowShortOutput?: boolean
+    }
   ): Promise<LlmCallResult>
   /** 读取并渲染提示词模板（缺失 → 抛可读错误） */
   render(name: string, vars?: Record<string, unknown>): Promise<string>
@@ -373,6 +379,16 @@ export interface LlmTaskAdapter {
    * parse 侧防御（如 lineAnnotation 的重复本地 id 检测——引用置 null 不猜）仍是纵深防御。
    */
   batching?: Partial<BatchingConfig>
+  /**
+   * 可选：**该任务的设计输出本来就极短**，需放开「返回不足 50 字 = 审查拦截」的判定。
+   *
+   * 目前只有 `cacheWarming` 为 true——它的输出契约就是 `{"answer":"ok"}`（15 字符），
+   * 而全局审查拦截规则按长度判定（<50 字即拒绝语），会把它的正确回答稳定判成拦截，
+   * 导致整条流水线卡在第一个任务（详见 `llm-client.ts` 的 `ChatOptions.allowShortOutput`）。
+   *
+   * 未声明的适配器行为完全不变（加性可选字段）。
+   */
+  allowShortOutput?: boolean
   /**
    * 解析并校验模型输出。
    *

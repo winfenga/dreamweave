@@ -100,6 +100,21 @@ export interface ImportSummary {
   totalSize: number
   jsonLen: number
   blobStart: number
+  /**
+   * 工作库**目录名**（= `<userData>/workspace/` 下的那一层，形如 `20261105165850-8fe33c`）。
+   *
+   * 为什么必须单独带出来：`project.id` 是**包内 ID**（manifest 里的 pkgId，形如
+   * `672d589e-5b8e-476b-888a-b5c7354f393b`），与落盘目录名**完全解耦**
+   * （目录名是导入时现场分配的「UTC14位-随机hex」，同一本书重复导入会各不相同）。
+   * 而所有「按工作库定位」的 IPC（`pipeline:parseStart` / `tasksOverview` /
+   * `imagegen:targets` / `imagegen:generate`）都把这个参数当作**目录名**用
+   * （见 `ipc/index.ts` 里 `join(workspaceRoot(), sanitizeSegment(pkgId))`）。
+   *
+   * 历史 bug：渲染层把 `project.id` 直接传给了这些 IPC → 拼出一个不存在的目录
+   * → 报「工作库索引缺失或不可读：…/672d589e-…/index.json (ENOENT)」，
+   * 同时解析面板显示的任务计数全部错乱（全 0 / 全待跑）。
+   */
+  workspaceDir: string
   project: {
     id: string
     title: string

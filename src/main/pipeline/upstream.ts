@@ -33,6 +33,46 @@ import type { UpstreamEntry } from '../../shared/pipeline-types'
 
 export type { UpstreamEntry } from '../../shared/pipeline-types'
 
+/**
+ * 上游产物**双形态解包**：`{data:{…}}` 信封 → `data`；裸值原样返回。
+ *
+ * 为什么必须统一：`persistence.writeResult` 写入的是
+ * `{ data, depth, calls, warnings, at, source }` 信封（`orchestrator` 构造），
+ * 所以**本机跑出来的产物一律多一层 `data`**；而来源包自带的历史产物 / 某些
+ * 本地步骤（merge / canonical / draftAlign）是裸值。适配器读上游时两种都会遇到，
+ * 因此解包必须「有 data 就剥、没有就用原值」——不能写死只读一种形状。
+ *
+ * 🔴 事故记录（务必别再各写一份）：`worldImpression` 曾**漏做这层解包**，直接读
+ * `e.value.chunkSummary`，而真实产物是 `{ data: { chunkSummary } }` → 所有条目都被
+ * 判为「无 chunkSummary」→ 抛「全部 plot 条目均无 chunkSummary」，
+ * 而磁盘上 plot.json 里摘要明明有内容。症状极具误导性（看起来像上游没跑）。
+ *
+ * 本函数是**唯一实现**：此前它被复制粘贴到 6 个适配器里（characterAppearance /
+ * characterRelation / lineAnnotation / plotLocationMerge / storyScript / local），
+ * 复制体彼此独立演化，才会出现「7 个对、1 个漏」的局面。新增适配器一律 import 这里。
+ */
+export function unwrapData(value: unknown): unknown {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const d = (value as Record<string, unknown>).data
+    if (d !== undefined && d !== null) return d
+  }
+  return value
+}
+
+/**
+ * 读某任务全部上游产物并**已解包 data**（`{key, data}` 形态）。
+ *
+ * 比裸 `readUpstreamResults` 多做一步统一解包，供适配器直接消费——
+ * 避免每个适配器各写一份 `unwrapData(e.value)` 而漏掉个别调用点（见上方事故记录）。
+ */
+export async function readUpstreamData(
+  root: string,
+  taskId: string
+): Promise<Array<{ key: string; data: unknown }>> {
+  const entries = await readUpstreamResults(root, taskId)
+  return entries.map((e) => ({ key: String(e.key), data: unwrapData(e.value) }))
+}
+
 /** taskId → 目标分片文件匹配（与 `routeResultsKey` 同口径；storyScript 为前缀多文件）。 */
 function matchesTaskFile(file: string, taskId: string): boolean {
   if (taskId === 'storyScript') {

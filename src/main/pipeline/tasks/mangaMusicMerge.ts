@@ -99,7 +99,9 @@ export const mangaMusicMergeAdapter: LlmTaskAdapter = {
       const o = obj as Record<string, unknown>
       const groups = o.musicGroups
       if (!Array.isArray(groups)) {
-        return { groups: [], musicGroups: [], raw: (content ?? '').slice(0, 500) }
+        throw new Error(
+          `mangaMusicMerge 解析失败：顶层 musicGroups 不是数组（实际字段：${Object.keys(o).join(',') || '无'}）`
+        )
       }
       const out: Record<string, unknown>[] = []
       for (const g of groups) {
@@ -154,6 +156,17 @@ export const mangaMusicMergeAdapter: LlmTaskAdapter = {
       }
       return { groups: out, musicGroups: out }
     }
-    return { groups: [], musicGroups: [], raw: (content ?? '').slice(0, 500) }
+    // 解析失败 → 抛错（不要静默产出空产物，理由见 mangaScript.parse 的说明）
+    const text = String(content ?? '')
+    const parsed = parseJsonLoose(text)
+    const why =
+      parsed === null
+        ? 'parseJsonLoose 返回 null（响应不是合法 JSON）'
+        : typeof parsed !== 'object' || Array.isArray(parsed)
+          ? `解析结果不是对象（实际 ${Array.isArray(parsed) ? 'array' : typeof parsed}）`
+          : `顶层 musicGroups 不是数组（实际字段：${Object.keys(parsed as Record<string, unknown>).join(',') || '无'}）`
+    throw new Error(
+      `mangaMusicMerge 解析失败：${why}。响应共 ${text.length} 字符，结尾 ${JSON.stringify(text.slice(-160))}`
+    )
   }
 }

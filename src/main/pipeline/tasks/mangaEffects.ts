@@ -319,6 +319,11 @@ export const mangaEffectsAdapter: LlmTaskAdapter = {
     const obj = parseJsonLoose(content)
     if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
       const o = obj as Record<string, unknown>
+      if (!Array.isArray(o.effects)) {
+        throw new Error(
+          `mangaEffects 解析失败：顶层 effects 不是数组（实际字段：${Object.keys(o).join(',') || '无'}）`
+        )
+      }
       const list = o.effects
       if (Array.isArray(list)) {
         const known = new Set(MANGA_EFFECT_CATALOG.map((e) => e.id))
@@ -365,6 +370,18 @@ export const mangaEffectsAdapter: LlmTaskAdapter = {
         return { effects: out, scriptHash: typeof o.scriptHash === 'string' ? o.scriptHash : undefined }
       }
     }
-    return { effects: [], raw: (content ?? '').slice(0, 500) }
+    // 解析失败 → 抛错（不要静默产出空产物：那会让任务显示成功、下游却拿不到数据，
+    // 用户看到的只是「跑完了但什么都没有」）。同时保留足够信息用于定位。
+    const text = String(content ?? '')
+    const failed = parseJsonLoose(text)
+    const why =
+      failed === null
+        ? 'parseJsonLoose 返回 null（响应不是合法 JSON）'
+        : typeof failed !== 'object' || Array.isArray(failed)
+          ? `解析结果不是对象（实际 ${Array.isArray(failed) ? 'array' : typeof failed}）`
+          : `顶层缺少 effects 数组（实际字段：${Object.keys(failed as Record<string, unknown>).join(',') || '无'}）`
+    throw new Error(
+      `mangaEffects 解析失败：${why}。响应共 ${text.length} 字符，结尾 ${JSON.stringify(text.slice(-160))}`
+    )
   }
 }

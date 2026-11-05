@@ -18,7 +18,8 @@ import {
   resultsShardFile,
   storyScriptShardFile
 } from './paths'
-import type { KeyedEntry, ShardEnvelope, ShardRoute, WorkspaceIndex } from './types'
+import { updateIndex } from './index-store'
+import type { KeyedEntry, ShardEnvelope, ShardRoute, WorkspaceIndex, ShardRow } from './types'
 
 /**
  * 已知任务 id（29 任务 + recon 登记的伴随程序步骤 memoryBefore/memoryAfter + 观测到的 templates）。
@@ -255,9 +256,45 @@ export async function updateShard(
       await rm(tmp, { force: true }).catch(() => undefined)
       throw e
     }
-    return { sha256: sha256Hex(Buffer.from(text, 'utf8')), env: next }
+    const sha256 = sha256Hex(Buffer.from(text, 'utf8'))
+    // 🔴 关键：把分片登记/更新进 index.shards[]。
+    //
+    // 事故（用户实测）：所有**聚合型任务**（worldImpression / locationTree /
+    // characterAppearance …）一律报「工作库中没有任何 <上游> 结果」，
+    // 但对应产物文件明明存在且有内容。
+    // 根因：本函数只写分片文件，**从不登记 index.shards** → 索引里没有该行 →
+    // `readUpstreamResults` 遍历 `idx.shards` 时匹配不到 → 恒返回空数组。
+    // 而此前只有 `unpack`（解包来源包）会 push 索引行，运行期新写的产物全漏登记。
+    await registerShardRow(root, {
+      name: shardName,
+      file,
+      container,
+      entryCount: next.entries.length,
+      sha256
+    })
+    return { sha256, env: next }
   })
   return { env, sha256 }
+}
+
+/**
+ * `index.shards[]` 的 upsert（按 `file` 定位；不存在则追加）。
+ *
+ * 必须经 `updateIndex`（全局索引队列）：分片写是 per-file 队列，而 `index.json`
+ * 是**单一文件**、有多个并发写者（本函数 / 任务状态镜像 / sha256 回填 / 资产导入）。
+ * 各自 read-modify-write 会互相覆盖导致**丢行**——正是「产物存在但聚合任务读不到」
+ * 的根因，所以登记必须走同一把锁。
+ */
+async function registerShardRow(root: string, row: ShardRow): Promise<void> {
+  await updateIndex(root, (idx) => {
+    const i = idx.shards.findIndex((s) => s.file === row.file)
+    if (i >= 0) {
+      // 保留既有 name（解包时登记的语义更准），只刷新内容指标
+      idx.shards[i] = { ...idx.shards[i], entryCount: row.entryCount, sha256: row.sha256 }
+    } else {
+      idx.shards.push(row)
+    }
+  })
 }
 
 /**

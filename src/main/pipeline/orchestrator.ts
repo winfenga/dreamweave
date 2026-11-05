@@ -81,6 +81,21 @@ interface RunState {
   /** G4 耗时结算表：实例键 → running 起点的墙钟毫秒（setState 内部消费） */
   startedAt: Record<string, number>
   error?: string
+  /**
+   * 在途 LLM 请求的中断器集合（取消时全部 abort）。
+   *
+   * 为什么必须有：`cancel()` 原本只是把 `cancelled = true` 置上，靠「实例/任务之间
+   * 检查」协作退出。但**正在飞的 LLM 请求不受影响**——单个 chunk 任务（如 seg）
+   * 一个请求就可能挂十几分钟（长输入 + 慢模型 + 无响应），期间：
+   *   · `cancelled` 标志永远轮不到检查
+   *   · run 的 `running` 一直为 true
+   *   · 渲染层 `actionsDisabled = busy || running` 恒为 true
+   *   · **所有「重跑」「开始解析」按钮永久变灰 → 用户看到「点了没反应」**
+   * 这是真实事故：一个卡住的 seg 请求把整块面板锁死，取消按钮也救不回来
+   * （点了取消只是置标志，请求仍在飞）。
+   * 现在取消会真正 abort 在途请求，编排器立刻往下走并正常收尾。
+   */
+  inflight: Set<AbortController>
 }
 
 const runs = new Map<string, RunState>()
@@ -297,7 +312,8 @@ export async function start(pkgId: string, opts: OrchestratorOptions = {}): Prom
     total,
     done: 0,
     states: prevStates,
-    startedAt: {}
+    startedAt: {},
+    inflight: new Set()
   }
   runs.set(runId, state)
   emit({ runId, pkgId, phase: 'start', done: 0, total })
@@ -549,13 +565,23 @@ function makeRuntime(
     render: (name: string, vars?: Record<string, unknown>) => renderPrompt(name, vars ?? {}),
     llm: async (messages: ChatMessage[], opts): Promise<LlmCallResult> => {
       if (!deps.providers.length) throw new Error('没有可用的模型配置（请在设置中新增并选中一条）')
+      // 适配器可声明「本任务输出本来就极短」（如 cacheWarming 的 {"answer":"ok"}），
+      // 此时必须放开「不足 50 字 = 审查拦截」判定，否则正确回答会被稳定误判为拒绝语，
+      // 整条流水线卡在第一个任务。未声明的适配器行为不变。
+      const allowShortOutput = opts?.allowShortOutput ?? LLM_ADAPTERS[task.id]?.allowShortOutput ?? false
+      // 在途请求挂中断器：取消时 orchestrate.cancel() 会 abort 全部在途请求，
+      // 让 run 立刻收尾（否则一个挂住的长请求会把整个面板锁死，见 RunState.inflight）。
+      const ac = new AbortController()
+      state.inflight.add(ac)
       const outcome = await chatWithFallback(
         messages,
         {
           taskId: task.id,
           maxTokens: opts?.maxTokens ?? task.maxTokens,
           thinking: opts?.thinking ?? task.thinking,
-          effort: opts?.effort ?? task.effort
+          effort: opts?.effort ?? task.effort,
+          allowShortOutput,
+          signal: ac.signal
         },
         deps.providers,
         async (log) => {
@@ -577,7 +603,9 @@ function makeRuntime(
           }
           await appendAttempt(state.root, task.id, rec)
         }
-      )
+      ).finally(() => {
+        state.inflight.delete(ac)
+      })
       if (!outcome.ok) {
         // 审查拦截 → 抛可识别错误，让任务层标记 blocked 而不是普通失败。
         // 关键区别：普通失败会自动重试/换配置；blocked 必须**停下来等人处理**，
@@ -617,12 +645,50 @@ export function parseStatus(runId: string): ParseStatus {
   }
 }
 
-/** 取消某次运行（协作式：实例/任务间检查）。 */
+/**
+ * 取消某次运行。
+ *
+ * **两层语义**（缺一不可）：
+ *  1. 置 `cancelled = true` —— 协作式标志，编排器在实例/任务边界检查后退出循环；
+ *  2. **abort 全部在途 LLM 请求** —— 否则一个正在飞的长请求（seg/mangaScript 这类
+ *     长输入任务很常见）会一直挂着，`cancelled` 检查永远轮不到执行。
+ *
+ * 历史事故（用户实测「取消点了没用 / 所有按钮永久变灰」）：
+ * 原先只有第 1 层，一个卡住的 seg:0 请求让 run 永远 `running = true`，
+ * 渲染层 `actionsDisabled = busy || running` 恒真 → **33 个重跑按钮全部 disabled**，
+ * 用户点任何按钮都「没反应」，连取消也救不回来，只能重启应用。
+ */
 export function cancel(runId: string): { ok: boolean } {
   const s = runs.get(runId)
   if (!s) return { ok: false }
   s.cancelled = true
+  // 真正打断在途请求：abort 后 fetch 立刻 reject，编排器捕获后正常收尾
+  for (const ac of s.inflight) {
+    try {
+      ac.abort(new Error('用户取消了解析'))
+    } catch {
+      /* 已 abort 过或不可中断，忽略 */
+    }
+  }
+  s.inflight.clear()
   return { ok: true }
+}
+
+/**
+ * 取消**所有**正在运行的 run（兜底入口）。
+ *
+ * 用途：UI 上「取消」按钮只知道自己记着的那个 runId；如果页面刷新/换书导致
+ * runId 丢失，那个 run 就再也取消不掉了（症状同上：按钮永久变灰）。
+ * 提供无参取消，让渲染层可以在「发现按钮被锁但自己没在跑」时一键清场。
+ */
+export function cancelAll(): { ok: boolean; cancelled: number } {
+  let n = 0
+  for (const [id, s] of runs) {
+    if (s.error || s.cancelled || s.done >= s.total) continue
+    cancel(id)
+    n++
+  }
+  return { ok: true, cancelled: n }
 }
 
 /** 续跑：以同一工作库重跑（已 succeeded 的实例自动跳过）。 */

@@ -37,6 +37,17 @@ export function parseJsonLoose(content: string): unknown {
 export const cacheWarmingAdapter: LlmTaskAdapter = {
   id: 'cacheWarming',
   mergeStrategy: 'concat-dedup-order',
+  /**
+   * **本任务的输出契约就是 `{"answer":"ok"}`（15 字符）**。
+   *
+   * 历史上曾必须显式声明它才能通过「不足 50 字 = 审查拦截」的判定；
+   * 现在 `isLikelyContentBlocked` 已升级为「短文本里合法 JSON 放行」，
+   * 所以本项**不再是必要条件**（`{"answer":"ok"}` 本身就会被放行）。
+   *
+   * 仍保留声明，原因是它表达了真实意图（本任务确实只回极短内容），
+   * 且若将来判定规则再收紧，这一行能让本任务继续豁免，不必再次排查。
+   */
+  allowShortOutput: true,
 
   async inputText(rt: TaskRuntime): Promise<string> {
     // 有章节切片时按「各章从 1 重新编号」组装；否则（调用方直接注入 chunkText）视作单章原文。

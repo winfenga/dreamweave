@@ -20,7 +20,7 @@ import { sha256Hex } from '../t2w/format'
 import { assembleManifest } from './manifest-assembler'
 import { storyScriptShardFile } from './paths'
 import { storyScriptChunkOf } from './shards'
-import { readIndex, writeIndex } from './index-store'
+import { readIndex, updateIndex } from './index-store'
 import { withShard } from './shards'
 import { refreshSessionIndex } from './session'
 import type { KeyedEntry, ShardEnvelope, WorkspaceIndex } from './types'
@@ -94,19 +94,22 @@ export async function verifyAssembled(
   return { total: idx.assets.length + idx.shards.length, passed, failed: issues.length, issues }
 }
 
-/** 更新 index.shards[] 中某分片行的 sha256/entryCount 并原子写 index。 */
+/**
+ * 更新 index.shards[] 中某分片行的 sha256/entryCount 并原子写 index。
+ *
+ * 经 `updateIndex`（全局索引队列）——不能在这里自己 read-modify-write：
+ * `index.json` 有多个并发写者（分片登记 / 任务状态镜像 / 本函数），
+ * 各读各的旧值再写回会静默丢行（曾导致聚合型任务读不到上游产物）。
+ */
 export async function updateShardRow(
   root: string,
-  idx: WorkspaceIndex,
   file: string,
   sha256: string,
   entryCount: number
 ): Promise<WorkspaceIndex> {
-  const shards = idx.shards.map((s) =>
-    s.file === file ? { ...s, sha256, entryCount } : s
-  )
-  const next: WorkspaceIndex = { ...idx, shards }
-  await writeIndex(root, next)
+  const next = await updateIndex(root, (cur) => {
+    cur.shards = cur.shards.map((s) => (s.file === file ? { ...s, sha256, entryCount } : s))
+  })
   refreshSessionIndex(next)
   return next
 }
@@ -261,7 +264,7 @@ export async function writeStoryScriptShards(
       if (!r) continue
       if (r.hits > 0 || r.ranges > 0) {
         touchedFiles.push(file)
-        idx = await updateShardRow(root, idx, file, r.sha256, r.entryCount)
+        idx = await updateShardRow(root, file, r.sha256, r.entryCount)
       }
     }
 

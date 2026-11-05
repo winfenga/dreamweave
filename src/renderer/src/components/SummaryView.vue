@@ -80,8 +80,13 @@ const entityGroups = computed(() => [
         </table>
       </div>
 
-      <!-- 解析入口（A1）：开始/子集/取消 + 进度 + 失败可见 + 可重跑 -->
-      <ParsePanel :pkg-id="p.id" />
+      <!-- 解析入口（A1）：开始/子集/取消 + 进度 + 失败可见 + 可重跑
+           ⚠️ 这里必须传「工作库目录名」而不是「包内 ID」：
+           ParsePanel / ImagegenPanel 内部把该值当作 `<userData>/workspace/` 下的目录名用
+           （主进程 `join(workspaceRoot(), sanitizeSegment(pkgId))`）。传 p.id（包内 pkgId）
+           会拼出不存在的路径 → 报「工作库索引缺失或不可读：…/<pkgId>/index.json (ENOENT)」，
+           且所有任务计数回落到「全 0 / 全待跑」。 -->
+      <ParsePanel :pkg-id="summary.workspaceDir" />
     </section>
 
     <!-- 章节 -->

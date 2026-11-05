@@ -134,11 +134,13 @@ async function readAppearanceInputs(rt: TaskRuntime): Promise<{
   }
   const entries: UpstreamEntry[] = await rt.readUpstream('canonical')
   let characters: unknown[] | null = null
+  let sawCanonical = false
   for (const e of entries) {
     const data = unwrapData(e.value)
     if (!data || typeof data !== 'object' || Array.isArray(data)) continue
     const objects = (data as Record<string, unknown>).objects
     if (!objects || typeof objects !== 'object' || Array.isArray(objects)) continue
+    sawCanonical = true
     const chars = (objects as Record<string, unknown>).characters
     if (Array.isArray(chars)) {
       characters = chars
@@ -146,7 +148,17 @@ async function readAppearanceInputs(rt: TaskRuntime): Promise<{
     }
   }
   if (!characters) {
-    throw new Error('characterAppearance 需要 canonical 产物：工作库中没有任何含 objects.characters 的 canonical 结果，请先运行 canonical 任务')
+    // 区分「读不到 canonical 产物」（索引/依赖问题，重跑 canonical 可解）
+    // 与「canonical 产出了但 characters 为空」（上游 merge 没提取出人物，
+    // 要检查 mergeReview / draftCharacter 的质量）——两者处置完全不同，
+    // 混成一句话会让用户按错误的按钮重跑。
+    throw new Error(
+      entries.length === 0
+        ? 'characterAppearance 需要 canonical 产物：工作库中没有任何 canonical 结果，请先运行 canonical 任务'
+        : sawCanonical
+          ? 'characterAppearance 需要 canonical 产物：canonical 结果里 objects.characters 为空（上游未提取出任何人物），请先检查 draftCharacter / mergeReview 产物，或重跑这些任务后再跑 canonical'
+          : 'characterAppearance 需要 canonical 产物：canonical 结果缺少 objects 字段，请先重跑 canonical 任务'
+    )
   }
   const chars: AppearanceInputChar[] = []
   const spriteChunkIndexes = new Map<string, Array<number | null>>()

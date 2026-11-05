@@ -166,6 +166,15 @@ const api = {
   /** 取消某次运行 */
   parseCancel: (runId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('pipeline:parseCancel', runId),
   /**
+   * 取消**全部**运行中的解析（兜底清场）。
+   *
+   * 场景：页面刷新/换书后渲染层丢了自己记的 runId，那个 run 就失去了取消入口，
+   * 而 `running` 恒为 true 会把所有解析按钮锁死（点什么都「没反应」）。
+   * 用它一键清空全部在跑解析，恢复按钮可用。
+   */
+  parseCancelAll: (): Promise<{ ok: boolean; cancelled: number }> =>
+    ipcRenderer.invoke('pipeline:parseCancelAll'),
+  /**
    * 29 任务面板视图（T5）：本机状态计数 + 每任务失败明细 + 来源包历史条数（不计入本机成绩）。
    * @param pkgId 工作库**目录名**（`WorkspaceListItem.id`）；不传则用当前会话的工作库
    */
