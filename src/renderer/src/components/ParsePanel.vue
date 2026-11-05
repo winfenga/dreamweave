@@ -178,6 +178,112 @@ async function start(range: string[] | 'all', force = false): Promise<void> {
   }
 }
 
+/**
+ * 一键子集：按产物用途分组，让用户不必记 33 个任务名。
+ *
+ * 【为什么必须自动补全前置，而不能只传"目标任务"】
+ * 编排器对 `range` 是**严格过滤**（`ordered.filter(t => rangeSet.has(t.id))`），
+ * 不在 range 里的任务根本不会被调度。而每个任务都有自己的上游依赖，
+ * 只传目标任务会因为「依赖未就绪」被整批跳过 —— 看起来像"点了没反应"。
+ * 所以这里按注册表的 `dependsOn` 做一次**闭包展开**，把前置一并带上。
+ *
+ * 【分组口径】
+ *   - 演出：feature 属于 visualNovel / events 的一组（剧本、特效、地图、印象）
+ *   - 漫画：feature 属于 manga 的一组（分镜、特效、配乐）
+ *   - 人物：feature 属于 entities / characters / relations / factions / items / creatures
+ *   - always / any：公共基础（缓存预热、阅读记忆压缩），所有分组都要
+ * 这套口径直接来自注册表的 feature 字段，不另设映射表 —— 注册表加任务时自动跟上。
+ */
+type SubsetKey = 'show' | 'manga' | 'people'
+
+const SUBSET_DEFS: Record<SubsetKey, { label: string; hint: string; features: string[] }> = {
+  show: {
+    label: '只做演出',
+    hint: '剧本 + 特效 + 地图 + 印象图谱（小说演出用）',
+    features: ['visualNovel', 'events']
+  },
+  manga: {
+    label: '只做漫画',
+    hint: '分镜脚本 + 漫画特效 + 配乐需求',
+    features: ['manga']
+  },
+  people: {
+    label: '只做人物档案',
+    hint: '人物/势力/物品/生物 + 关系网（角色卡用）',
+    features: ['entities', 'characters', 'relations', 'factions', 'items', 'creatures']
+  }
+}
+
+/**
+ * 依赖声明 → 基础任务 id。
+ * 注册表里的依赖带后缀语义（`X:i` / `X:*` / `X:next` / `X:selected` / `X:n`），
+ * 展开闭包时只关心"是哪个任务"，后缀由编排器按实例自己解析。
+ */
+function depBaseOf(dep: string): string {
+  const i = dep.indexOf(':')
+  return i < 0 ? dep : dep.slice(0, i)
+}
+
+/** 公共基础任务：所有分组都必须带上（否则下游全部"依赖未就绪"） */
+const ALWAYS_FEATURES = ['always', 'any']
+
+/**
+ * 计算某分组的**完整任务 id 列表**（含传递前置）。
+ *
+ * 做法：从种子集合出发反复扫表，凡是依赖落在集合内的一律并入，直到不再增长。
+ * 复杂度是 O(n²) 但 n=33，完全可以忽略。
+ */
+function buildSubset(key: SubsetKey): string[] {
+  const def = SUBSET_DEFS[key]
+  const all = rows.value
+  if (!all.length) return []
+
+  const byId = new Map(all.map((t) => [t.id, t]))
+  const picked = new Set<string>()
+
+  // 种子：本组 feature + 公共基础
+  for (const t of all) {
+    if (def.features.includes(t.feature) || ALWAYS_FEATURES.includes(t.feature)) picked.add(t.id)
+  }
+
+  // 闭包展开：反复把"目标任务的前置"并进来
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const id of [...picked]) {
+      const t = byId.get(id)
+      if (!t) continue
+      for (const dep of t.dependsOn ?? []) {
+        const base = depBaseOf(dep)
+        if (byId.has(base) && !picked.has(base)) {
+          picked.add(base)
+          grew = true
+        }
+      }
+    }
+  }
+
+  // 保持注册表原序（即拓扑序），编排器不需要再排
+  return all.filter((t) => picked.has(t.id)).map((t) => t.id)
+}
+
+const subsetCounts = computed<Record<SubsetKey, number>>(() => {
+  const out = { show: 0, manga: 0, people: 0 }
+  if (!rows.value.length) return out
+  for (const k of Object.keys(SUBSET_DEFS) as SubsetKey[]) out[k] = buildSubset(k).length
+  return out
+})
+
+function startSubsetKey(key: SubsetKey): void {
+  if (actionsDisabled.value) return
+  const ids = buildSubset(key)
+  if (!ids.length) {
+    error.value = '任务清单还没加载出来，稍等再试'
+    return
+  }
+  void start(ids)
+}
+
 function startAll(): void {
   void start('all')
 }
@@ -272,6 +378,27 @@ onUnmounted(() => {
       <span class="sub">来源包自带 {{ overview.inheritedTotal }} 条历史（不计入本机成绩）</span>
     </div>
     <div v-if="overviewError" class="error" style="margin-top: 10px">{{ overviewError }}</div>
+
+    <!--
+      一键子集：按「要什么产物」分组。
+      放在「开始解析（全部）」下面而不是替代它 —— 想全跑的人仍然点原来那个按钮。
+      每个按钮上带任务数，让人知道这次会发多少请求（33 个任务全跑是很贵的）。
+    -->
+    <div class="parse-presets" data-testid="parse-presets">
+      <span class="hint">按用途解析：</span>
+      <button
+        v-for="(def, key) in SUBSET_DEFS"
+        :key="key"
+        class="btn preset-btn"
+        :data-testid="'parse-preset-' + key"
+        :disabled="actionsDisabled || !rows.length"
+        :title="def.hint"
+        @click="startSubsetKey(key as SubsetKey)"
+      >
+        {{ def.label }}
+        <span class="preset-count">{{ subsetCounts[key as SubsetKey] }} 个任务</span>
+      </button>
+    </div>
 
     <div class="parse-actions" style="margin-top: 12px">
       <button class="btn primary" data-testid="parse-start" :disabled="actionsDisabled" @click="startAll">

@@ -1,10 +1,10 @@
 @echo off
-chcp 65001 >nul
+setlocal
 title DreamWeave 启动器
 cd /d "%~dp0"
 
 echo ============================================
-echo   DreamWeave · 织梦  启动器
+echo   DreamWeave  启动器
 echo ============================================
 echo.
 
@@ -15,7 +15,7 @@ if exist "node_modules\electron\dist\electron.exe" (
     echo.
     echo   数据目录: %~dp0DreamWeave-data
     echo.
-    echo   ^(窗口关闭即退出；如需开发者模式请运行 start-dev.cmd^)
+    echo   窗口关闭即退出；如需开发者模式请运行 start-dev.cmd
     echo.
     start "" "node_modules\electron\dist\electron.exe" .
     exit /b 0

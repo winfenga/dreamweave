@@ -490,6 +490,35 @@ textarea:focus-visible {
   max-width: 360px;
 }
 
+/*
+ * 按用途解析（一键子集）。
+ *
+ * 与「开始解析（全部）」并列，所以视觉上要**弱于**主按钮：
+ * 用描边按钮而不是实心，避免用户误以为这是推荐路径。
+ * 每个按钮上带任务数 —— 33 个任务全跑很贵，动手前先让人看清这一组要发多少次请求。
+ */
+.parse-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.preset-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.preset-count {
+  font-size: 11px;
+  opacity: 0.66;
+  font-variant-numeric: tabular-nums;
+}
+
 .parse-progress {
   margin-top: 12px;
   display: flex;
